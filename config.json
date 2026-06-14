@@ -1,0 +1,68 @@
+{
+  "_comment": "Single source of truth for every tunable constant and the fleet config. Read by the Python core via src/config.py, and emitted to docs/config.js by src/generate_dataset.py so the browser engine (docs/engine.js) reads identical values. Thresholds are illustrative pending fleet validation, except the servo datasheet limits (80 C for XM430-W350, 72 C for XL430-W250).",
+  "gate": {
+    "healthy_band_c": 20.0,
+    "warn_offset_c": 14.0,
+    "quarantine_offset_c": 6.0
+  },
+  "servo_temperature_limit_c": {
+    "XM430-W350": 80.0,
+    "XL430-W250": 72.0
+  },
+  "cusum": {
+    "baseline_days": 10,
+    "k_sigma": 0.5,
+    "h_sigma": 5.0
+  },
+  "maintenance": {
+    "thermal_action_cap_score": 70.0,
+    "drift_watch_score": 90.0,
+    "effort_zero_scale_pct": 0.5,
+    "effort_action_cap_pct": 0.25
+  },
+  "simulator": {
+    "runs_per_day": 4,
+    "intra_day_warmup_c": 1.2,
+    "run_noise_sigma_c": 0.5,
+    "current_noise_sigma_a": 0.008,
+    "canonical_seed": 20260626,
+    "joints": [
+      {"name": "waist", "model": "XM430-W350"},
+      {"name": "shoulder", "model": "XM430-W350", "servos": 2},
+      {"name": "elbow", "model": "XM430-W350", "servos": 2},
+      {"name": "forearm_roll", "model": "XM430-W350"},
+      {"name": "wrist_angle", "model": "XM430-W350"},
+      {"name": "wrist_rotate", "model": "XL430-W250"},
+      {"name": "gripper", "model": "XL430-W250"}
+    ],
+    "base_temp_c": {
+      "waist": 50.0,
+      "shoulder": 57.0,
+      "elbow": 59.0,
+      "forearm_roll": 48.0,
+      "wrist_angle": 45.0,
+      "wrist_rotate": 42.0,
+      "gripper": 40.0
+    },
+    "base_current_a": {
+      "waist": 0.20,
+      "shoulder": 0.32,
+      "elbow": 0.30,
+      "forearm_roll": 0.16,
+      "wrist_angle": 0.14,
+      "wrist_rotate": 0.12,
+      "gripper": 0.12
+    },
+    "fleet": [
+      {"robot_id": "wx-01", "profile": "healthy"},
+      {"robot_id": "wx-02", "profile": "healthy"},
+      {"robot_id": "wx-03", "profile": "thermal-creep", "creep_joint": "elbow", "creep_onset_day": 10, "creep_rate_c_per_day": 0.6},
+      {"robot_id": "wx-04", "profile": "healthy"},
+      {"robot_id": "wx-05", "profile": "healthy"},
+      {"robot_id": "wx-06", "profile": "effort-rise", "effort_joint": "shoulder", "effort_onset_day": 10, "effort_rate_a_per_day": 0.007},
+      {"robot_id": "wx-07", "profile": "healthy"},
+      {"robot_id": "wx-08", "profile": "acute-hot-start", "acute_day": 18, "acute_run": 2, "acute_joint": "elbow", "acute_spike_c": 22.0}
+    ]
+  },
+  "start_date": "2026-05-15"
+}

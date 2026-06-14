@@ -1,0 +1,3 @@
+# The library and dashboard are pure standard library and need no install.
+# Only the test suite needs a dependency:
+pytest

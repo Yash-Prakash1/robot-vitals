@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>robot-vitals</title>
+<style>
+  :root {
+    --bg:#f7f8fa; --panel:#fff; --ink:#1c2127; --muted:#5b6470; --line:#e3e6ea;
+    --accent:#2f6df0; --accentsoft:#2f6df015;
+    --pass:#1f9d57; --warn:#c98300; --quar:#d23f3f;
+    --stable:#1f9d57; --drift:#c98300; --alarm:#d23f3f; --grid:#eef0f3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0f1216; --panel:#161a20; --ink:#e6e9ee; --muted:#9aa4b1; --line:#262c34;
+      --accent:#5a8bff; --accentsoft:#5a8bff1c;
+      --pass:#3fb277; --warn:#e0a32e; --quar:#e85d5d;
+      --stable:#3fb277; --drift:#e0a32e; --alarm:#e85d5d; --grid:#1d232b;
+    }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); -webkit-font-smoothing:antialiased;
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  .wrap { max-width:1000px; margin:0 auto; padding:38px 22px 90px; }
+  h1 { font-size:26px; margin:0 0 4px; letter-spacing:-.01em; }
+  .tag { color:var(--muted); margin:0; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:0 0 4px; }
+  section { margin-top:38px; }
+  .lead { margin:0 0 16px; max-width:74ch; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px 20px; }
+  .synthetic { margin-top:14px; font-size:12.5px; color:var(--muted); border:1px solid var(--line);
+    border-radius:8px; padding:8px 12px; display:inline-block; }
+  .muted { color:var(--muted); }
+  .badge { font-size:10.5px; font-weight:600; padding:2px 8px; border-radius:20px; white-space:nowrap; }
+  .b-PASS,.b-stable { color:var(--stable); background:color-mix(in srgb,var(--stable) 15%,transparent); }
+  .b-WARN,.b-drifting { color:var(--drift); background:color-mix(in srgb,var(--drift) 18%,transparent); }
+  .b-QUARANTINE,.b-alarm { color:var(--alarm); background:color-mix(in srgb,var(--alarm) 18%,transparent); }
+  a { color:var(--accent); }
+
+  /* how-it-works steps */
+  .steps { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:8px; }
+  @media (max-width:760px){ .steps { grid-template-columns:1fr 1fr; } }
+  .step { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; font-size:13px; }
+  .step .n { display:inline-block; width:20px; height:20px; border-radius:50%; background:var(--accent); color:#fff;
+    font-size:12px; font-weight:700; text-align:center; line-height:20px; margin-bottom:6px; }
+  .worked { margin-top:14px; display:grid; grid-template-columns:1.4fr 1fr; gap:16px; }
+  @media (max-width:760px){ .worked { grid-template-columns:1fr; } }
+  table.joints { width:100%; border-collapse:collapse; font-size:13px; }
+  table.joints th,table.joints td { text-align:left; padding:4px 8px; }
+  table.joints th { color:var(--muted); font-weight:500; font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
+  table.joints tr+tr td { border-top:1px solid var(--line); }
+  table.joints td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  tr.weak td { background:color-mix(in srgb,var(--alarm) 10%,transparent); font-weight:600; }
+  pre.stamp { background:var(--grid); border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+    font-size:11.5px; line-height:1.5; overflow:auto; margin:0; }
+
+  /* controls + arm tabs */
+  .controls { display:flex; flex-wrap:wrap; gap:9px; align-items:center; margin:8px 0 4px; }
+  .controls button,.tab { font:inherit; font-size:13px; padding:6px 12px; border-radius:8px;
+    border:1px solid var(--line); background:var(--panel); color:var(--ink); cursor:pointer; }
+  .controls button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .controls input { font:inherit; font-size:13px; width:110px; padding:6px 8px; border-radius:8px;
+    border:1px solid var(--line); background:var(--bg); color:var(--ink); }
+  .runlabel { font-size:12.5px; color:var(--muted); }
+  .tabs { display:flex; flex-wrap:wrap; gap:7px; margin:6px 0 2px; }
+  .tab { display:flex; align-items:center; gap:7px; font-variant-numeric:tabular-nums; }
+  .tab.sel { border-color:var(--accent); background:var(--accentsoft); }
+  .tab .sdot { width:8px; height:8px; border-radius:50%; }
+
+  /* gate grid */
+  .gate-wrap { overflow-x:auto; }
+  .gate-grid { display:inline-grid; grid-auto-flow:column; gap:3px; margin-top:6px; }
+  .gcol { display:grid; grid-template-rows:repeat(4,1fr); gap:3px; }
+  .gcell { width:17px; height:15px; border-radius:3px; cursor:pointer; }
+  .gcell.PASS { background:var(--pass); opacity:.30; }
+  .gcell.WARN { background:var(--warn); }
+  .gcell.QUARANTINE { background:var(--quar); }
+  .gcell:hover { outline:2px solid var(--accent); outline-offset:1px; }
+  .xaxis { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin:6px 0 0; max-width:620px; }
+  .legend { display:flex; gap:16px; font-size:12px; color:var(--muted); margin:12px 0 0; flex-wrap:wrap; }
+  .legend i { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:middle; }
+
+  /* joint maintenance cards */
+  .jcards { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:6px; }
+  @media (max-width:760px){ .jcards { grid-template-columns:1fr; } }
+  .jcard { background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:12px 14px; }
+  .jcard.flag { border-color:color-mix(in srgb,var(--alarm) 45%,var(--line)); }
+  .jhead { display:flex; align-items:center; justify-content:space-between; }
+  .jname { font-weight:600; }
+  .jmodel { font-size:11px; color:var(--muted); }
+  .chan { margin-top:9px; }
+  .chan .ct { display:flex; justify-content:space-between; align-items:center; font-size:12px; }
+  .chan .cl { color:var(--muted); }
+  .cap { font-size:11px; color:var(--muted); margin-top:1px; }
+  svg { display:block; width:100%; height:auto; }
+
+  .payoff { background:var(--accentsoft); border:1px solid color-mix(in srgb,var(--accent) 38%,var(--line));
+    border-radius:12px; padding:18px 20px; }
+  .payoff strong { color:var(--accent); }
+  footer { margin-top:44px; font-size:12.5px; color:var(--muted); border-top:1px solid var(--line); padding-top:16px; }
+
+  /* tooltip + detail overlay */
+  #tip { position:fixed; pointer-events:none; z-index:30; background:var(--ink); color:var(--bg);
+    font-size:11.5px; line-height:1.5; padding:7px 10px; border-radius:7px; opacity:0; transition:opacity .08s;
+    transform:translate(-50%,calc(-100% - 10px)); max-width:280px; }
+  #overlay { position:fixed; inset:0; z-index:40; background:rgba(0,0,0,.45); display:none; padding:30px 16px; overflow:auto; }
+  #overlay.show { display:block; }
+  .sheet { max-width:760px; margin:0 auto; background:var(--bg); border:1px solid var(--line); border-radius:14px;
+    padding:22px 24px; }
+  .sheet .x { float:right; cursor:pointer; border:1px solid var(--line); background:var(--panel); color:var(--ink);
+    border-radius:8px; padding:4px 10px; font:inherit; font-size:13px; }
+  .bar { position:relative; height:16px; background:var(--grid); border-radius:4px; overflow:hidden; }
+  .bar .fill { position:absolute; left:0; top:0; bottom:0; border-radius:4px; }
+  .bar .lim { position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--alarm); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>robot-vitals</h1>
+    <p class="tag">A pre-flight data-integrity and predictive-maintenance layer for robot-learning fleets.</p>
+    <div class="synthetic" id="synthetic"></div>
+  </header>
+
+  <section id="how">
+    <h2>How the pre-flight check works</h2>
+    <p class="lead">Before <em>every</em> test run, the gate reads all seven joints and turns them into the
+    metadata that is stamped onto every episode the run records. Here is that calculation on the worst run
+    in this dataset. Click any run further down to see the same breakdown for it.</p>
+    <div class="steps" id="steps"></div>
+    <div class="worked panel" id="worked"></div>
+  </section>
+
+  <section id="fleet">
+    <h2>Pick an arm</h2>
+    <div class="controls">
+      <button id="btn-new" class="primary">New simulation</button>
+      <span class="muted">seed</span>
+      <input id="seed" type="number" min="0" step="1" placeholder="random">
+      <button id="btn-run">Run</button>
+      <button id="btn-reset">Reset to reference</button>
+      <span class="runlabel" id="runlabel"></span>
+    </div>
+    <div class="tabs" id="tabs"></div>
+  </section>
+
+  <section id="gate">
+    <h2 id="gate-h">Per-run gate</h2>
+    <p class="lead">Every cell is one test run (four per day, columns are days). Color is the run's verdict, set
+    by its weakest joint. Hover a run for all seven joint temperatures; click it for the full breakdown. Later
+    runs in a day are warmer, because the arm heats up under continued operation.</p>
+    <div class="panel">
+      <div class="gate-wrap"><div class="gate-grid" id="gate-grid"></div></div>
+      <div class="xaxis"><span id="ax0"></span><span id="ax1"></span></div>
+      <div class="legend">
+        <span><i style="background:var(--pass);opacity:.5"></i>PASS</span>
+        <span><i style="background:var(--warn)"></i>WARN</span>
+        <span><i style="background:var(--quar)"></i>QUARANTINE</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="maint">
+    <h2 id="maint-h">Predictive maintenance, per joint</h2>
+    <p class="lead">End of day, the same registers feed a CUSUM drift detector for each joint, on two channels:
+    thermal (temperature) and effort (reference-motion current). A joint is flagged only when the trend both
+    drifts statistically and degrades meaningfully. Watch a joint climb, see where maintenance was called
+    (drift detected), and where it became too bad to operate (the action cap).</p>
+    <div class="jcards" id="jcards"></div>
+  </section>
+
+  <section id="pay">
+    <h2>The payoff</h2>
+    <div class="payoff" id="payoff"></div>
+  </section>
+
+  <footer id="footer"></footer>
+</div>
+
+<div id="tip"></div>
+<div id="overlay"><div class="sheet" id="sheet"></div></div>
+
+<script src="data.js"></script>
+<script src="config.js"></script>
+<script src="engine.js"></script>
+<script>
+// Renders window.FLEET_DATA into five sections (mirroring the <section> ids
+// above): how-it-works -> arm picker -> per-run gate grid -> per-joint
+// maintenance -> payoff, plus a click-through run-detail overlay. render() is the
+// entry point (near the bottom); everything above it is a per-section renderer or
+// a small shared helper.
+(function () {
+  var REFERENCE = window.FLEET_DATA;
+  if (!REFERENCE) { document.getElementById("how").innerHTML = "data.js failed to load"; return; }
+  var hasEngine = !!(window.RVEngine && window.RVEngine.buildDataset);
+  var D = REFERENCE, selectedArm = null, tabButtons = [];
+  var tip = document.getElementById("tip");
+
+  function el(t,c,h){ var e=document.createElement(t); if(c)e.className=c; if(h!=null)e.innerHTML=h; return e; }
+  function byId(id){ return document.getElementById(id); }
+  function round(x,n){ var f=Math.pow(10,n||0); return Math.round(x*f)/f; }
+  function robot(id){ return D.robots.find(function(r){ return r.robot_id===id; }); }
+  function jointDef(name){ return D.meta.joints.find(function(j){ return j.name===name; }); }
+
+  // scoring (reads single-sourced thresholds; same formula as src/quality_score.py)
+  function score(temp,limit){ var b=D.meta.thresholds.healthy_band_c, c=limit-b;
+    if(temp<=c)return 100; if(temp>=limit)return 0; return 100*(limit-temp)/b; }
+  function verdict(temp,limit){ var th=D.meta.thresholds;
+    if(temp<=limit-th.warn_offset_c)return "PASS"; if(temp<=limit-th.quarantine_offset_c)return "WARN"; return "QUARANTINE"; }
+
+  // status / verdict to color (the CSS b-* classes encode the same map)
+  function lineColor(s){ return s==="alarm"?"var(--alarm)":(s==="drifting"?"var(--drift)":"var(--stable)"); }
+  function verdictColor(v){ return v==="QUARANTINE"?"var(--quar)":(v==="WARN"?"var(--warn)":"var(--pass)"); }
+  function armStatus(r){ return r.flags.some(function(f){return f.status==="alarm";})?"alarm":(r.flags.length?"drifting":"stable"); }
+
+  // one table row per joint, shared by the how-it-works table and the detail
+  // table (the only difference is the detail view's temp-vs-limit bar cell).
+  function jointRow(j,run,withBar){
+    var t=run.temps_c[j.name], sc=score(t,j.limit_c), vd=verdict(t,j.limit_c), weak=(j.name===run.weakest_joint);
+    var bar=withBar?"<td style='width:200px'><div class='bar'><div class='fill' style='width:"
+      +(Math.max(0,Math.min(1,(t-30)/(j.limit_c-30)))*100).toFixed(0)+"%;background:"+verdictColor(vd)
+      +";opacity:"+(vd==='PASS'?.45:.85)+"'></div><div class='lim' style='left:100%'></div></div></td>":"";
+    return "<tr class='"+(weak?"weak":"")+"'><td>"+j.name+(weak&&!withBar?" &larr; weakest":"")
+      +"</td><td class='muted'>"+j.model.split("-")[0]+"</td>"+bar+"<td class='num'>"+t.toFixed(1)
+      +"</td><td class='num'>"+j.limit_c+"</td><td class='num'>"+sc.toFixed(0)+"</td><td><span class='badge b-"+vd+"'>"+vd+"</span></td></tr>";
+  }
+  // the per-joint metadata stamped onto every episode of a run (mirrors RunReport.to_stamp)
+  function jointScores(run){
+    return Object.fromEntries(D.meta.joints.map(function(j){ var t=run.temps_c[j.name];
+      return [j.name,{temp_c:t,limit_c:j.limit_c,score:round(score(t,j.limit_c),1),verdict:verdict(t,j.limit_c)}]; }));
+  }
+
+  // ---------- generic line chart ----------
+  function lineChart(values, opts) {
+    var W=opts.width||320, H=opts.height||96, padL=34, padR=8, padT=8, padB=16;
+    var n=values.length, plotW=W-padL-padR, plotH=H-padT-padB;
+    var lo=opts.yMin, hi=opts.yMax, span=(hi-lo)||1;
+    var X=function(d){ return padL+(n<=1?0:d/(n-1)*plotW); };
+    var Y=function(v){ return padT+(1-(Math.max(lo,Math.min(hi,v))-lo)/span)*plotH; };
+    var p=["<svg viewBox='0 0 "+W+" "+H+"' role='img'>"];
+    // y axis labels (lo, hi)
+    p.push("<text x='2' y='"+(padT+4)+"' font-size='9' fill='var(--muted)'>"+round(hi,opts.yround||0)+"</text>");
+    p.push("<text x='2' y='"+(H-padB+3)+"' font-size='9' fill='var(--muted)'>"+round(lo,opts.yround||0)+"</text>");
+    (opts.lines||[]).forEach(function(L){
+      if(L.y<lo||L.y>hi)return; var y=Y(L.y).toFixed(1);
+      p.push("<line x1='"+padL+"' y1='"+y+"' x2='"+(W-padR)+"' y2='"+y+"' stroke='"+L.color+"' stroke-width='1' "+(L.dashed?"stroke-dasharray='4 3' ":"")+"opacity='"+(L.op||0.7)+"'/>");
+      if(L.label)p.push("<text x='"+(W-padR)+"' y='"+(y-2)+"' text-anchor='end' font-size='8.5' fill='"+L.color+"'>"+L.label+"</text>");
+    });
+    (opts.markers||[]).forEach(function(m){
+      if(m.x==null)return; var x=X(m.x).toFixed(1);
+      p.push("<line x1='"+x+"' y1='"+padT+"' x2='"+x+"' y2='"+(H-padB)+"' stroke='"+m.color+"' stroke-width='1' opacity='.55'/>");
+      p.push("<text x='"+x+"' y='"+(H-4)+"' text-anchor='middle' font-size='8.5' fill='"+m.color+"'>"+m.label+"</text>");
+    });
+    var pts=values.map(function(v,d){ return X(d)+","+Y(v).toFixed(1); }).join(" ");
+    p.push("<polyline fill='none' stroke='"+(opts.color||"var(--accent)")+"' stroke-width='1.8' points='"+pts+"'/>");
+    p.push("<circle cx='"+X(n-1).toFixed(1)+"' cy='"+Y(values[n-1]).toFixed(1)+"' r='2.4' fill='"+(opts.color||"var(--accent)")+"'/>");
+    p.push("</svg>"); return p.join("");
+  }
+  // the two markers every maintenance chart shares: where maintenance was called
+  // (drift detected) and where it became too bad to operate (cap crossed).
+  function driftMarkers(ch){ return [ {x:ch.cusum_detected_day,color:"var(--accent)",label:"called"},
+    {x:ch.cap_cross_day,color:"var(--alarm)",label:"pull"} ]; }
+  function thermalLines(limit){ return [ {y:limit,color:"var(--alarm)",label:"limit "+limit},
+    {y:limit-D.meta.thresholds.warn_offset_c,color:"var(--warn)",dashed:true,label:"warn"} ]; }
+
+  // ---------- how it works ----------
+  function worstRun() {
+    var best=null;
+    D.robots.forEach(function(r){ r.runs.forEach(function(run){ if(!best||run.gate_score<best.gate_score)best={run:run,rid:r.robot_id}; }); });
+    return best;
+  }
+  function renderHow() {
+    var steps=[
+      ["Read","Read every joint's Present Temperature over the serial bus. No added sensors."],
+      ["Score","Score each joint's headroom to its own datasheet limit (80 C XM430, 72 C XL430)."],
+      ["Weakest link","The run's gate score and verdict come from the weakest joint. One hot joint corrupts the run."],
+      ["Stamp","Attach the score, verdict, and per-joint breakdown to every episode the run records."],
+    ];
+    var s=byId("steps"); s.innerHTML="";
+    steps.forEach(function(st,i){ var d=el("div","step"); d.innerHTML="<span class='n'>"+(i+1)+"</span><div><strong>"+st[0]+"</strong><br><span class='muted'>"+st[1]+"</span></div>"; s.appendChild(d); });
+
+    var w=worstRun(); var run=w.run;
+    var rows=D.meta.joints.map(function(j){ return jointRow(j,run,false); }).join("");
+    var stamp={ robot_id:w.rid, run_id:run.run_id, timestamp:run.timestamp,
+      quality_score:run.gate_score, verdict:run.verdict, weakest_joint:run.weakest_joint };
+    byId("worked").innerHTML =
+      "<div><div class='muted' style='font-size:12px;margin-bottom:6px'>Run "+run.run_id+" at "+run.timestamp+"</div>"
+      +"<table class='joints'><tr><th>Joint</th><th>Servo</th><th>Temp C</th><th>Limit</th><th>Score</th><th>Verdict</th></tr>"+rows+"</table></div>"
+      +"<div><div class='muted' style='font-size:12px;margin-bottom:6px'>Metadata stamped onto the episode</div>"
+      +"<pre class='stamp'>"+JSON.stringify(stamp,null,2)+"</pre></div>";
+  }
+
+  // ---------- gate grid for the selected arm ----------
+  function renderGate(r) {
+    byId("gate-h").textContent="Per-run gate · "+r.robot_id;
+    var grid=byId("gate-grid"); grid.innerHTML="";
+    var byDay={};
+    r.runs.forEach(function(run){ (byDay[run.day]=byDay[run.day]||[])[run.run_index]=run; });
+    Object.keys(byDay).map(Number).sort(function(a,b){return a-b;}).forEach(function(day){
+      var col=el("div","gcol");
+      byDay[day].forEach(function(run){
+        var c=el("div","gcell "+run.verdict);
+        c.addEventListener("mousemove",function(ev){ showTip(ev, runTip(r.robot_id,run)); });
+        c.addEventListener("mouseleave",function(){ tip.style.opacity=0; });
+        c.addEventListener("click",function(){ openDetail(r,run); });
+        col.appendChild(c);
+      });
+      grid.appendChild(col);
+    });
+    byId("ax0").textContent=D.meta.start_date; byId("ax1").textContent=D.meta.end_date;
+  }
+  function runTip(rid,run){
+    var js=D.meta.joints.map(function(j){
+      var t=run.temps_c[j.name], weak=(j.name===run.weakest_joint);
+      return "<span style='color:"+(weak?"#fff":"inherit")+(weak?";font-weight:700":"")+"'>"+j.name+" "+t.toFixed(1)+"</span>";
+    }).join(" &middot; ");
+    return "<strong>"+rid+"  "+run.timestamp.replace("T"," ")+"  run "+run.run_index+"</strong><br>"
+      +"verdict <strong>"+run.verdict+"</strong>, gate score "+run.gate_score+"<br>"+js+"<br><span style='opacity:.7'>click for detail</span>";
+  }
+  function showTip(ev,html){ tip.innerHTML=html; tip.style.opacity=1; tip.style.left=ev.clientX+"px"; tip.style.top=ev.clientY+"px"; }
+
+  // ---------- maintenance cards for the selected arm ----------
+  function thermalChart(ch,j){
+    var lo=Math.min.apply(null,ch.raw)-1.5, hi=Math.max(j.limit_c+1.5, Math.max.apply(null,ch.raw)+1.5);
+    return lineChart(ch.raw,{ yMin:lo, yMax:hi, color:lineColor(ch.status),
+      lines:thermalLines(j.limit_c), markers:driftMarkers(ch) });
+  }
+  function effortChart(ch){
+    var base=ch.baseline_mean, cap=base*(1+D.meta.thresholds.effort_action_cap_pct);
+    var lo=Math.min(base*0.96, Math.min.apply(null,ch.raw))-0.005, hi=Math.max(cap*1.04, Math.max.apply(null,ch.raw))+0.005;
+    return lineChart(ch.raw,{ yMin:lo, yMax:hi, yround:2, color:lineColor(ch.status),
+      lines:[ {y:cap,color:"var(--alarm)",dashed:true,label:"cap +25%"}, {y:base,color:"var(--muted)",label:"baseline",op:.5} ],
+      markers:driftMarkers(ch) });
+  }
+  function capNote(ch){
+    if(ch.status==="stable")return "stable, no sustained drift";
+    var s="maintenance called "+D.meta.dates[ch.cusum_detected_day];
+    if(ch.cap_cross_day!=null)s+=", too bad to operate "+D.meta.dates[ch.cap_cross_day];
+    return s;
+  }
+  function renderMaint(r){
+    byId("maint-h").textContent="Predictive maintenance, per joint · "+r.robot_id;
+    var box=byId("jcards"); box.innerHTML="";
+    D.meta.joints.forEach(function(j){
+      var m=r.maintenance[j.name], flag=(m.thermal.status!=="stable"||m.effort.status!=="stable");
+      var card=el("div","jcard"+(flag?" flag":""));
+      card.innerHTML="<div class='jhead'><span class='jname'>"+j.name+"</span><span class='jmodel'>"+j.model+", "+j.limit_c+" C</span></div>";
+      [["Thermal (C)",m.thermal,thermalChart(m.thermal,j)],["Effort (A)",m.effort,effortChart(m.effort)]].forEach(function(row){
+        var c=el("div","chan");
+        c.innerHTML="<div class='ct'><span class='cl'>"+row[0]+"</span><span class='badge b-"+row[1].status+"'>"+row[1].status+"</span></div>"+row[2]+"<div class='cap'>"+capNote(row[1])+"</div>";
+        card.appendChild(c);
+      });
+      box.appendChild(card);
+    });
+  }
+
+  // ---------- run detail overlay ----------
+  function openDetail(r,run){
+    var rows=D.meta.joints.map(function(j){ return jointRow(j,run,true); }).join("");
+    // weakest joint's daily temperature trend up to this run's day
+    var wj=run.weakest_joint, ch=r.maintenance[wj].thermal, jd=jointDef(wj);
+    var trend=lineChart(ch.raw.slice(0,run.day+1),{ width:680, height:120, color:"var(--accent)",
+      yMin:Math.min.apply(null,ch.raw)-1.5, yMax:jd.limit_c+1.5,
+      lines:thermalLines(jd.limit_c), markers:[{x:run.day,color:"var(--accent)",label:"this run"}] });
+    var js=jointScores(run), vals=Object.keys(js).map(function(k){ return js[k].score; });
+    var stamp={ robot_id:r.robot_id, run_id:run.run_id, timestamp:run.timestamp, quality_score:run.gate_score,
+      verdict:run.verdict, weakest_joint:run.weakest_joint,
+      health_average:round(vals.reduce(function(a,b){return a+b;},0)/vals.length,1), joints:js };
+    byId("sheet").innerHTML =
+      "<button class='x' onclick='document.getElementById(\"overlay\").classList.remove(\"show\")'>close</button>"
+      +"<h2>Test run "+run.run_id+"</h2><p class='muted' style='margin:.2em 0 1em'>"+r.robot_id+" ("+r.profile.replace(/-/g," ")+") &middot; "+run.timestamp.replace("T"," ")+" &middot; verdict <strong class='b-"+run.verdict+"' style='padding:2px 8px;border-radius:20px'>"+run.verdict+"</strong></p>"
+      +"<h2>All seven joints scored against their own limits</h2>"
+      +"<table class='joints' style='margin-bottom:18px'><tr><th>Joint</th><th>Servo</th><th>Temp vs limit</th><th>Temp C</th><th>Limit</th><th>Score</th><th>Verdict</th></tr>"+rows+"</table>"
+      +"<h2>Weakest joint ("+wj+") leading up to this run</h2>"+trend
+      +"<h2 style='margin-top:18px'>Metadata stamped onto every episode of this run</h2><pre class='stamp'>"+JSON.stringify(stamp,null,2)+"</pre>";
+    byId("overlay").classList.add("show");
+  }
+
+  // ---------- payoff ----------
+  function renderPayoff(){
+    var e=byId("payoff");
+    var creep=D.robots.find(function(r){ return r.flags.some(function(f){ return f.channel==="thermal"&&f.status==="alarm"; }); });
+    if(!creep){ e.innerHTML="<p style='margin:0'>No joint reached the maintenance alarm this run. Try another simulation to see the two-timescale payoff.</p>"; return; }
+    var f=creep.flags.find(function(x){ return x.channel==="thermal"&&x.status==="alarm"; });
+    var firstWarn=creep.runs.find(function(run){ return run.weakest_joint===f.joint&&run.verdict!=="PASS"; });
+    var until=firstWarn?D.meta.dates[firstWarn.day]:"the end", lead=firstWarn?(firstWarn.day-f.detected_day):0;
+    var leadPhrase=(firstWarn&&lead>0)
+      ? ", <strong>"+lead+" days earlier</strong>, and marked it too bad to operate on "+D.meta.dates[f.cap_cross_day]+"." : ".";
+    e.innerHTML="<p style='margin:0 0 8px'>On <strong>"+creep.robot_id+"</strong>, the <strong>"+f.joint+"</strong> joint passed its per-run gate every run until "
+      +until+". The maintenance layer called for attention on <strong>"+D.meta.dates[f.detected_day]+"</strong>"+leadPhrase
+      +"</p><p style='margin:0;color:var(--muted)'>Same registers, two timescales. The longitudinal layer buys a scheduled fix instead of a mid-collection failure, without claiming a date it cannot honestly know.</p>";
+  }
+
+  // ---------- arm tabs + top-level render ----------
+  // Tabs are built once per dataset; switching arms only re-highlights and
+  // re-renders the arm panels, not the whole tab strip.
+  function buildTabs(){
+    var t=byId("tabs"); t.innerHTML=""; tabButtons=[];
+    D.robots.forEach(function(r){
+      var b=el("button","tab");
+      b.innerHTML="<span class='sdot' style='background:"+lineColor(armStatus(r))+"'></span>"+r.robot_id;
+      b.addEventListener("click",function(){ selectedArm=r.robot_id; highlightTabs(); renderArm(); });
+      tabButtons.push({b:b,id:r.robot_id}); t.appendChild(b);
+    });
+    highlightTabs();
+  }
+  function highlightTabs(){ tabButtons.forEach(function(x){ x.b.className="tab"+(x.id===selectedArm?" sel":""); }); }
+  function renderArm(){
+    var r=robot(selectedArm); renderGate(r); renderMaint(r);
+  }
+  function render(){
+    byId("synthetic").textContent = D.meta.generated_note+"  "+D.meta.fleet_size+" WidowX-250 arms, "
+      +D.meta.runs_per_day+" runs/day over "+D.meta.days+" days ("+D.meta.start_date+" to "+D.meta.end_date
+      +"). 7 joints; shoulder and elbow are each driven by two servos on the real arm. Real register reads: src/interface.py.";
+    renderHow();
+    if(!selectedArm||!robot(selectedArm)){
+      var planted=D.robots.find(function(r){ return r.flags.length; });
+      selectedArm=(planted||D.robots[0]).robot_id;
+    }
+    buildTabs(); renderArm(); renderPayoff();
+    var th=D.meta.thresholds;
+    byId("footer").innerHTML="Thresholds are illustrative pending fleet validation, except the servo datasheet limits "
+      +"(80 C XM430, 72 C XL430). CUSUM k = "+th.cusum_k_sigma+" sigma, h = "+th.cusum_h_sigma+" sigma, baseline "
+      +th.baseline_days+" days; a joint is flagged only with both a CUSUM detection and a drop past the watch level. "
+      +"See the README for the audit and the real register reads.";
+  }
+
+  // ---------- controls ----------
+  function showRef(){ D=REFERENCE; selectedArm=null; render(); byId("runlabel").textContent="Reference fleet (Python, seed 20260626)."; }
+  function showGen(seed){ D=window.RVEngine.buildDataset(seed); selectedArm=null; render(); byId("runlabel").textContent="Generated in your browser, seed "+seed+"."; }
+  showRef();
+  var seedInput=byId("seed");
+  if(hasEngine){
+    byId("btn-new").addEventListener("click",function(){ var s=Math.floor(Math.random()*1e9); seedInput.value=s; showGen(s); });
+    byId("btn-run").addEventListener("click",function(){ var v=seedInput.value; var s=(v===""||isNaN(+v))?Math.floor(Math.random()*1e9):(Math.abs(+v)>>>0); seedInput.value=s; showGen(s); });
+    byId("btn-reset").addEventListener("click",showRef);
+  } else {
+    ["btn-new","btn-run","btn-reset"].forEach(function(id){ byId(id).disabled=true; });
+    byId("runlabel").textContent="engine.js not loaded; reference fleet only.";
+  }
+  byId("overlay").addEventListener("click",function(ev){ if(ev.target===byId("overlay"))byId("overlay").classList.remove("show"); });
+})();
+</script>
+</body>
+</html>
