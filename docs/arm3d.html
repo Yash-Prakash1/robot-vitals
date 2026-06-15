@@ -127,21 +127,20 @@
   var GLEN=0.95; // wrist pivot to grasp point
   var graspAnchor=new THREE.Object3D(); graspAnchor.position.y=GLEN; wristPivot.add(graspAnchor);
 
-  // ---- table props: bin of source blocks + a stack pad ----
-  var BH=0.34; // block size
-  var binPos=new THREE.Vector3(1.55,0,1.0), stackPos=new THREE.Vector3(1.2,0,-1.05);
-  var bin=new THREE.Mesh(new THREE.BoxGeometry(1.0,0.12,1.0),new THREE.MeshStandardMaterial({color:0x171c24,metalness:0.3,roughness:0.8}));
-  bin.position.set(binPos.x,0.06,binPos.z); bin.receiveShadow=true; scene.add(bin);
-  var pad=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.05,0.7),new THREE.MeshStandardMaterial({color:0x202632,metalness:0.2,roughness:0.9}));
+  // ---- table props: a spaced source row + a stack pad ----
+  var BH=0.34, GAP=0.015, MAX=4;
+  var SROW={x0:1.2,dx:0.42,z:0.95}, stackPos=new THREE.Vector3(1.2,0,-1.05);
+  var TRAYTOP=0.05, PADTOP=0.05;
+  var pad=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.05,0.6),new THREE.MeshStandardMaterial({color:0x222a36,metalness:0.2,roughness:0.9}));
   pad.position.set(stackPos.x,0.025,stackPos.z); pad.receiveShadow=true; scene.add(pad);
-  var BCOLORS=[0xcf6b4f,0x4f86cf,0x57b079,0xd0a24a,0x9a6bcf];
-  function blockMesh(i){ var m=new THREE.Mesh(new THREE.BoxGeometry(BH,BH,BH),new THREE.MeshStandardMaterial({color:BCOLORS[i%5],metalness:0.15,roughness:0.6})); m.castShadow=true; m.receiveShadow=true; return m; }
-  var MAX=4;
-  // source pile (decorative, always present)
-  for(var i=0;i<3;i++){ var sb=blockMesh(i+1); sb.position.set(binPos.x-0.18+0.18*i,BH/2+0.12,binPos.z+0.12-0.12*i); scene.add(sb); }
-  var stackBlocks=[]; for(i=0;i<MAX;i++){ var b=blockMesh(i); b.visible=false; b.position.set(stackPos.x,BH/2+i*BH+0.05,stackPos.z); scene.add(b); }
-  var carried=blockMesh(0); carried.visible=false; scene.add(carried);
-  var stackCount=0;
+  var tray=new THREE.Mesh(new THREE.BoxGeometry(MAX*SROW.dx+0.2,0.05,0.5),new THREE.MeshStandardMaterial({color:0x171c24,metalness:0.3,roughness:0.85}));
+  tray.position.set(SROW.x0+(MAX-1)*SROW.dx/2,0.025,SROW.z); tray.receiveShadow=true; scene.add(tray);
+  var BCOLORS=[0xcf6b4f,0x4f86cf,0x57b079,0xd0a24a];
+  function blockMesh(i){ var m=new THREE.Mesh(new THREE.BoxGeometry(BH,BH,BH),new THREE.MeshStandardMaterial({color:BCOLORS[i%4],metalness:0.15,roughness:0.6})); m.castShadow=true; m.receiveShadow=true; return m; }
+  var blocks=[]; for(var bi=0;bi<MAX;bi++){ var b=blockMesh(bi); scene.add(b); blocks.push(b); }
+  function homeSource(){ for(var i=0;i<MAX;i++) blocks[i].position.set(SROW.x0+i*SROW.dx, TRAYTOP+BH/2, SROW.z); }
+  homeSource();
+  var placeBaseY=PADTOP+BH/2, placedCount=0;  // first block center sits on the pad
 
   // ---- inverse kinematics (2-link planar + waist yaw, gripper down) ----
   function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
@@ -164,29 +163,30 @@
     cur.yaw+=(s.yaw-cur.yaw)*a; cur.sh+=(s.sh-cur.sh)*a; cur.el+=(s.el-cur.el)*a; cur.wr+=(s.wr-cur.wr)*a;
     root.rotation.y=cur.yaw; shoulderPivot.rotation.x=cur.sh; elbowPivot.rotation.x=cur.el; wristPivot.rotation.x=cur.wr; }
 
-  // ---- choreography (stack the blocks) ----
-  function ph(){ var pdny=BH/2+stackCount*BH+0.05;
-    return [ {x:binPos.x,y:1.3,z:binPos.z,g:1,d:0.55},
-      {x:binPos.x,y:BH/2+0.13,z:binPos.z,g:1,d:0.5},
-      {x:binPos.x,y:BH/2+0.13,z:binPos.z,g:0,d:0.32,e:"grab"},
-      {x:binPos.x,y:1.4,z:binPos.z,g:0,d:0.5},
-      {x:stackPos.x,y:1.55,z:stackPos.z,g:0,d:0.7},
-      {x:stackPos.x,y:pdny,z:stackPos.z,g:0,d:0.5},
-      {x:stackPos.x,y:pdny,z:stackPos.z,g:1,d:0.3,e:"place"},
-      {x:stackPos.x,y:1.55,z:stackPos.z,g:1,d:0.45} ]; }
-  var plan=ph(), pi=0, ptime=0, prevT=new THREE.Vector3(binPos.x,1.3,binPos.z), grip=1, carrying=false;
+  // ---- choreography: move each real block from the source row onto the stack ----
+  function cyclePlan(){ var aIdx=MAX-1-placedCount, s=blocks[aIdx].position, py=placeBaseY+placedCount*(BH+GAP);
+    return { aIdx:aIdx, py:py, steps:[
+      {x:s.x,y:1.25,z:s.z,g:1,d:0.5},                 // above the next source block
+      {x:s.x,y:s.y,z:s.z,g:1,d:0.45},                  // descend onto it
+      {x:s.x,y:s.y,z:s.z,g:0,d:0.3,e:"grab"},          // close gripper, pick it up
+      {x:s.x,y:1.35,z:s.z,g:0,d:0.45},                 // lift
+      {x:stackPos.x,y:1.5,z:stackPos.z,g:0,d:0.65},    // carry over the stack
+      {x:stackPos.x,y:py,z:stackPos.z,g:0,d:0.5},      // lower to the stack height
+      {x:stackPos.x,y:py,z:stackPos.z,g:1,d:0.3,e:"place"}, // release, it snaps neatly
+      {x:stackPos.x,y:1.55,z:stackPos.z,g:1,d:0.4} ] }; }   // retract
+  var cyc=cyclePlan(), plan=cyc.steps, pi=0, ptime=0, prevT=new THREE.Vector3(SROW.x0,1.25,SROW.z), grip=1, carrying=false, active=null;
   var tmp=new THREE.Vector3();
   function taskStep(dt){
     var p=plan[pi]; ptime+=dt; var f=clamp(ptime/p.d,0,1); var ease=f<0.5?2*f*f:1-Math.pow(-2*f+2,2)/2;
     tmp.set(prevT.x+(p.x-prevT.x)*ease, prevT.y+(p.y-prevT.y)*ease, prevT.z+(p.z-prevT.z)*ease);
     applyIK(solveIK(tmp),0.35);
     grip+=((p.g?1:0)-grip)*0.25; var open=0.10+0.10*grip; fL.position.x=-open; fR.position.x=open;
-    if(carrying){ graspAnchor.getWorldPosition(carried.position); }
+    if(carrying&&active) graspAnchor.getWorldPosition(active.position);  // the held block follows the gripper
     if(f>=1){
-      if(p.e==="grab"){ carrying=true; carried.visible=true; }
-      else if(p.e==="place"){ carrying=false; carried.visible=false; if(stackCount<MAX){ stackBlocks[stackCount].visible=true; stackCount++; } }
+      if(p.e==="grab"){ carrying=true; active=blocks[cyc.aIdx]; }
+      else if(p.e==="place"){ carrying=false; if(active) active.position.set(stackPos.x,cyc.py,stackPos.z); active=null; placedCount++; }
       prevT.set(p.x,p.y,p.z); ptime=0; pi++;
-      if(pi>=plan.length){ pi=0; if(stackCount>=MAX){ stackCount=0; stackBlocks.forEach(function(b){b.visible=false;}); } plan=ph(); }
+      if(pi>=plan.length){ pi=0; if(placedCount>=MAX){ placedCount=0; homeSource(); } cyc=cyclePlan(); plan=cyc.steps; }
     }
   }
 
