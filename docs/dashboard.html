@@ -118,16 +118,16 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>robot-vitals</h1>
-    <p class="tag">A pre-flight data-integrity and predictive-maintenance layer for robot-learning fleets.</p>
+    <h1>robot-vitals &middot; engineer's view</h1>
+    <p class="tag">The dense view: every arm's 30 days of pre-flight checks and maintenance trends, the same data and logic as the <a href="index.html">guided demo &rarr;</a>, shown raw.</p>
     <div class="synthetic" id="synthetic"></div>
   </header>
 
   <section id="how">
     <h2>How the pre-flight check works</h2>
-    <p class="lead">Before <em>every</em> test run, the gate reads all seven joints and turns them into the
-    metadata that is stamped onto every episode the run records. Here is that calculation on the worst run
-    in this dataset. Click any run further down to see the same breakdown for it.</p>
+    <p class="lead">Before every run, the gate reads all seven joint temperatures and turns them into the
+    metadata stamped on each recorded episode. Here it is on the worst run in this fleet. Click any run below
+    to see the same breakdown.</p>
     <div class="steps" id="steps"></div>
     <div class="worked panel" id="worked"></div>
   </section>
@@ -147,9 +147,9 @@
 
   <section id="gate">
     <h2 id="gate-h">Per-run gate</h2>
-    <p class="lead">Every cell is one test run (four per day, columns are days). Color is the run's verdict, set
-    by its weakest joint. Hover a run for all seven joint temperatures; click it for the full breakdown. Later
-    runs in a day are warmer, because the arm heats up under continued operation.</p>
+    <p class="lead">Each cell is one run (four per day, columns are days), colored by its verdict, set by the
+    weakest joint. Hover for all seven temperatures, click for the full breakdown. Later runs in a day run
+    warmer, as the arm heats up.</p>
     <div class="panel">
       <div class="gate-wrap"><div class="gate-grid" id="gate-grid"></div></div>
       <div class="xaxis"><span id="ax0"></span><span id="ax1"></span></div>
@@ -163,10 +163,9 @@
 
   <section id="maint">
     <h2 id="maint-h">Predictive maintenance, per joint</h2>
-    <p class="lead">End of day, the same registers feed a CUSUM drift detector for each joint, on two channels:
-    thermal (temperature) and effort (reference-motion current). A joint is flagged only when the trend both
-    drifts statistically and degrades meaningfully. Watch a joint climb, see where maintenance was called
-    (drift detected), and where it became too bad to operate (the action cap).</p>
+    <p class="lead">At day's end, the same sensors feed a drift detector for each joint, on two channels:
+    temperature and motor current. A joint is flagged only when it both drifts statistically and degrades
+    meaningfully. Watch where maintenance was called (blue), and where the joint got too degraded to trust (red).</p>
     <div class="jcards" id="jcards"></div>
   </section>
 
@@ -202,6 +201,7 @@
   function round(x,n){ var f=Math.pow(10,n||0); return Math.round(x*f)/f; }
   function robot(id){ return D.robots.find(function(r){ return r.robot_id===id; }); }
   function jointDef(name){ return D.meta.joints.find(function(j){ return j.name===name; }); }
+  function armName(id){ return "Arm "+(+String(id).replace("wx-","")); }  // friendly label; the raw id stays in the data
 
   // scoring (reads single-sourced thresholds; same formula as src/quality_score.py)
   function score(temp,limit){ var b=D.meta.thresholds.healthy_band_c, c=limit-b;
@@ -293,7 +293,7 @@
 
   // ---------- gate grid for the selected arm ----------
   function renderGate(r) {
-    byId("gate-h").textContent="Per-run gate · "+r.robot_id;
+    byId("gate-h").textContent="Per-run gate · "+armName(r.robot_id);
     var grid=byId("gate-grid"); grid.innerHTML="";
     var byDay={};
     r.runs.forEach(function(run){ (byDay[run.day]=byDay[run.day]||[])[run.run_index]=run; });
@@ -315,7 +315,7 @@
       var t=run.temps_c[j.name], weak=(j.name===run.weakest_joint);
       return "<span style='color:"+(weak?"#fff":"inherit")+(weak?";font-weight:700":"")+"'>"+j.name+" "+t.toFixed(1)+"</span>";
     }).join(" &middot; ");
-    return "<strong>"+rid+"  "+run.timestamp.replace("T"," ")+"  run "+run.run_index+"</strong><br>"
+    return "<strong>"+armName(rid)+"  "+run.timestamp.replace("T"," ")+"  run "+run.run_index+"</strong><br>"
       +"verdict <strong>"+run.verdict+"</strong>, gate score "+run.gate_score+"<br>"+js+"<br><span style='opacity:.7'>click for detail</span>";
   }
   function showTip(ev,html){ tip.innerHTML=html; tip.style.opacity=1; tip.style.left=ev.clientX+"px"; tip.style.top=ev.clientY+"px"; }
@@ -340,7 +340,7 @@
     return s;
   }
   function renderMaint(r){
-    byId("maint-h").textContent="Predictive maintenance, per joint · "+r.robot_id;
+    byId("maint-h").textContent="Predictive maintenance, per joint · "+armName(r.robot_id);
     var box=byId("jcards"); box.innerHTML="";
     D.meta.joints.forEach(function(j){
       var m=r.maintenance[j.name], flag=(m.thermal.status!=="stable"||m.effort.status!=="stable");
@@ -369,7 +369,7 @@
       health_average:round(vals.reduce(function(a,b){return a+b;},0)/vals.length,1), joints:js };
     byId("sheet").innerHTML =
       "<button class='x' onclick='document.getElementById(\"overlay\").classList.remove(\"show\")'>close</button>"
-      +"<h2>Test run "+run.run_id+"</h2><p class='muted' style='margin:.2em 0 1em'>"+r.robot_id+" ("+r.profile.replace(/-/g," ")+") &middot; "+run.timestamp.replace("T"," ")+" &middot; verdict <strong class='b-"+run.verdict+"' style='padding:2px 8px;border-radius:20px'>"+run.verdict+"</strong></p>"
+      +"<h2>Test run "+run.run_id+"</h2><p class='muted' style='margin:.2em 0 1em'>"+armName(r.robot_id)+" ("+r.profile.replace(/-/g," ")+") &middot; "+run.timestamp.replace("T"," ")+" &middot; verdict <strong class='b-"+run.verdict+"' style='padding:2px 8px;border-radius:20px'>"+run.verdict+"</strong></p>"
       +"<h2>All seven joints scored against their own limits</h2>"
       +"<table class='joints' style='margin-bottom:18px'><tr><th>Joint</th><th>Servo</th><th>Temp vs limit</th><th>Temp C</th><th>Limit</th><th>Score</th><th>Verdict</th></tr>"+rows+"</table>"
       +"<h2>Weakest joint ("+wj+") leading up to this run</h2>"+trend
@@ -387,7 +387,7 @@
     var until=firstWarn?D.meta.dates[firstWarn.day]:"the end", lead=firstWarn?(firstWarn.day-f.detected_day):0;
     var leadPhrase=(firstWarn&&lead>0)
       ? ", <strong>"+lead+" days earlier</strong>, and marked it too bad to operate on "+D.meta.dates[f.cap_cross_day]+"." : ".";
-    e.innerHTML="<p style='margin:0 0 8px'>On <strong>"+creep.robot_id+"</strong>, the <strong>"+f.joint+"</strong> joint passed its per-run gate every run until "
+    e.innerHTML="<p style='margin:0 0 8px'>On <strong>"+armName(creep.robot_id)+"</strong>, the <strong>"+f.joint+"</strong> joint passed its per-run gate every run until "
       +until+". The maintenance layer called for attention on <strong>"+D.meta.dates[f.detected_day]+"</strong>"+leadPhrase
       +"</p><p style='margin:0;color:var(--muted)'>Same registers, two timescales. The longitudinal layer buys a scheduled fix instead of a mid-collection failure, without claiming a date it cannot honestly know.</p>";
   }
@@ -399,7 +399,7 @@
     var t=byId("tabs"); t.innerHTML=""; tabButtons=[];
     D.robots.forEach(function(r){
       var b=el("button","tab");
-      b.innerHTML="<span class='sdot' style='background:"+lineColor(armStatus(r))+"'></span>"+r.robot_id;
+      b.innerHTML="<span class='sdot' style='background:"+lineColor(armStatus(r))+"'></span>"+armName(r.robot_id);
       b.addEventListener("click",function(){ selectedArm=r.robot_id; highlightTabs(); renderArm(); });
       tabButtons.push({b:b,id:r.robot_id}); t.appendChild(b);
     });

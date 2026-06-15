@@ -18,8 +18,8 @@
   .inner{max-width:1000px;margin:0 auto;width:100%;}
   .kicker{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--accent);font-weight:700;margin:0 0 10px;}
   h1{font-size:clamp(28px,5vw,46px);line-height:1.08;margin:0 0 14px;letter-spacing:-.02em;}
-  h2{font-size:clamp(22px,3.4vw,32px);margin:0 0 12px;letter-spacing:-.01em;}
-  .lead{font-size:clamp(16px,2vw,19px);color:#c7cedb;max-width:62ch;margin:0 0 18px;}
+  h2{font-size:clamp(22px,3.4vw,32px);margin:0 0 10px;letter-spacing:-.01em;}
+  .lead{font-size:clamp(15px,1.8vw,18px);color:#c7cedb;max-width:60ch;margin:0 0 18px;}
   .muted{color:var(--muted);}
   .btn{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#fff;border:none;border-radius:11px;
     padding:12px 22px;font:inherit;font-weight:700;cursor:pointer;text-decoration:none;}
@@ -32,13 +32,24 @@
   .scrollcue{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);color:var(--muted);font-size:12px;animation:bob 1.8s ease-in-out infinite;}
   @keyframes bob{0%,100%{transform:translate(-50%,0);}50%{transform:translate(-50%,7px);}}
 
-  /* arm + panels */
-  .armwrap{background:radial-gradient(600px 360px at 50% 30%,#171d28,var(--panel2));border:1px solid var(--line);border-radius:18px;padding:8px;position:relative;}
-  svg{display:block;width:100%;height:auto;}
-  .joint{transition:fill .5s ease, filter .5s ease;cursor:pointer;}
+  /* shared 3D arm stage (hops between scenes) */
+  .arm3dstage{position:relative;border:1px solid var(--line);border-radius:18px;overflow:hidden;
+    background:radial-gradient(700px 440px at 50% 22%,#1a2230,#0c1016);height:430px;cursor:grab;}
+  .arm3dstage:active{cursor:grabbing;}
+  .arm3dcanvas{position:absolute;inset:0;width:100%;height:100%;z-index:1;}
+  .fb2d{position:absolute;inset:0;width:100%;height:100%;display:none;z-index:1;padding:14px;}
+  .heroStage{height:320px;max-width:500px;margin:6px auto 6px;}
+  .hud3d{position:absolute;left:14px;top:11px;font-size:12px;color:var(--muted);z-index:2;} .hud3d b{color:var(--ink);}
+  .legend3d{position:absolute;right:14px;top:11px;display:flex;gap:7px;align-items:center;font-size:11px;color:var(--muted);z-index:2;}
+  .legend3d .bar{height:8px;width:108px;border-radius:6px;background:linear-gradient(90deg,#39b0ff,#2fb36a,#e6a72e,#e85d5d);}
+  .hint3d{position:absolute;right:14px;bottom:11px;font-size:11px;color:var(--muted);z-index:2;}
+  .reset3d{position:absolute;left:14px;bottom:11px;font-size:11px;color:var(--muted);cursor:pointer;border:1px solid var(--line);border-radius:14px;padding:3px 10px;background:#0a0d12aa;z-index:2;}
+  .reset3d:hover{color:var(--ink);}
+
+  /* panels */
   .seg{stroke:#9fb0c6;stroke-linecap:round;fill:none;} .seg2{stroke:#5b6b82;stroke-linecap:round;fill:none;}
-  .legend{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--muted);padding:4px 10px 8px;}
-  .legend .bar{height:8px;width:130px;border-radius:6px;background:linear-gradient(90deg,#39b0ff,#2fb36a,#e6a72e,#e85d5d);}
+  .joint{cursor:pointer;}
+  svg{display:block;width:100%;height:auto;}
   .stage{display:grid;grid-template-columns:1.15fr 1fr;gap:16px;align-items:start;}
   @media(max-width:820px){.stage{grid-template-columns:1fr;}}
   .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:14px;padding:14px 16px;}
@@ -53,61 +64,41 @@
   .controls{margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:11px 15px;}
   input[type=range]{flex:1;min-width:150px;accent-color:var(--accent);}
   select{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font:inherit;}
-  .daychip{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);}
-  .daychip b{color:var(--ink);}
-
-  /* 3D stage (film centerpiece) */
-  .arm3dwrap{padding:0;overflow:hidden;}
-  .arm3dstage{position:relative;border-radius:17px;overflow:hidden;background:radial-gradient(700px 440px at 50% 22%,#1a2230,#0c1016);height:430px;cursor:grab;}
-  .arm3dstage:active{cursor:grabbing;}
-  #filmCanvas{display:block;width:100%;height:100%;}
-  .hud3d{position:absolute;left:14px;top:11px;font-size:12px;color:var(--muted);} .hud3d b{color:var(--ink);}
-  .legend3d{position:absolute;right:14px;top:11px;display:flex;gap:7px;align-items:center;font-size:11px;color:var(--muted);}
-  .legend3d .bar{height:8px;width:110px;border-radius:6px;background:linear-gradient(90deg,#39b0ff,#2fb36a,#e6a72e,#e85d5d);}
-  .task3d{position:absolute;left:14px;bottom:11px;font-size:11.5px;color:var(--muted);}
-  .reset3d{position:absolute;right:14px;bottom:11px;font-size:11.5px;color:var(--muted);cursor:pointer;border:1px solid var(--line);border-radius:14px;padding:3px 10px;background:#0a0d12aa;}
-  .reset3d:hover{color:var(--ink);}
-  .fallback3d{position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:30px;font-size:13px;}
 
   /* hero */
   #hero{background:radial-gradient(900px 600px at 50% 0%,#161d2b,var(--bg));text-align:center;}
-  #hero .inner{max-width:760px;}
-  .heroarm{max-width:380px;margin:6px auto 4px;}
-  .twolines{max-width:440px;margin:0 auto;}
-  .blame{font-weight:800;font-size:clamp(20px,3vw,26px);margin:10px 0 2px;min-height:1.3em;}
+  #hero .inner{max-width:720px;}
+  .blame{font-weight:800;font-size:clamp(19px,3vw,26px);margin:14px 0 4px;min-height:1.3em;}
   .src{font-size:12px;color:var(--muted);margin-top:14px;}
   .src a{color:var(--accent);}
 
-  /* aha freeze */
+  /* the call */
   .split{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
   @media(max-width:680px){.split{grid-template-columns:1fr;}}
   .verdictbig{font-size:13px;font-weight:700;padding:4px 12px;border-radius:20px;display:inline-block;}
-  .moneyline{font-size:clamp(18px,2.6vw,24px);font-weight:700;margin:16px 0 0;line-height:1.3;}
-  .lead .hl{color:var(--accent);} .lead .hlr{color:var(--quar);}
+  .moneyline{font-size:clamp(17px,2.4vw,22px);font-weight:700;margin:16px 0 0;line-height:1.3;}
+  .hl{color:var(--accent);} .hlr{color:var(--quar);}
 
   /* audit */
   .faults{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-top:8px;}
   .fault{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:11px 13px;font-size:13px;transition:opacity .5s,filter .5s,border-color .5s;}
   .fault.gone{opacity:.32;filter:grayscale(1);}
-  .fault.keep{border-color:var(--pass);} .fault.cand{border-color:var(--warn);}
+  .fault.keep{border-color:var(--pass);} .fault.cand{border-color:var(--warn);} .fault.sec{border-color:var(--accent);}
   .fault .fn{font-weight:700;margin-bottom:3px;} .fault .fr{color:var(--muted);font-size:12px;}
   .tag{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:14px;}
-  .tag.keep{color:var(--pass);background:#2fb36a22;} .tag.cand{color:var(--warn);background:#e6a72e22;} .tag.cut{color:var(--muted);background:#ffffff10;}
-  .fault.sec{border-color:var(--accent);} .tag.sec{color:var(--accent);background:#5a8bff22;}
+  .tag.keep{color:var(--pass);background:#2fb36a22;} .tag.cand{color:var(--warn);background:#e6a72e22;}
+  .tag.cut{color:var(--muted);background:#ffffff10;} .tag.sec{color:var(--accent);background:#5a8bff22;}
 
-  /* sandbox */
+  /* sandbox + fleet */
   .sandctl{display:flex;gap:16px;flex-wrap:wrap;align-items:end;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:14px 16px;margin-bottom:14px;}
   .field{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted);}
   .field b{color:var(--ink);font-weight:600;}
-
-  /* fleet */
   .fleet{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:8px;}
   .arm-mini{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;cursor:pointer;text-align:center;transition:border-color .2s;}
   .arm-mini:hover,.arm-mini.sel{border-color:var(--accent);}
-  .arm-mini .id{font-weight:700;font-variant-numeric:tabular-nums;} .arm-mini .pf{font-size:11px;color:var(--muted);}
+  .arm-mini .id{font-weight:700;} .arm-mini .pf{font-size:11px;color:var(--muted);}
 
-  /* about + footer */
-  .about{max-width:760px;margin:0 auto;}
+  .about{max-width:720px;margin:0 auto;}
   .about p{color:#c7cedb;}
   footer{padding:40px 20px;text-align:center;color:var(--muted);font-size:13px;}
   footer a{color:var(--accent);}
@@ -124,46 +115,44 @@
   <div class="inner">
     <p class="kicker">robot-vitals</p>
     <h1>The robot got sick. The AI took the blame.</h1>
-    <div class="armwrap heroarm"><svg id="heroArm" viewBox="0 0 340 300"></svg></div>
-    <div class="twolines"><svg id="heroLines" viewBox="0 0 440 120"></svg></div>
-    <div class="blame" id="blame"></div>
-    <p class="lead muted" style="margin:8px auto 18px;">A motor slowly overheats over a long shift. The data the robot records is quietly corrupted. The eval score drops, and the policy takes the fall for a hardware fault. This is documented, and nobody was watching for it. I built the part that watches.</p>
-    <div class="row" style="justify-content:center;">
-      <a class="btn" href="#film">See how to catch it &darr;</a>
-      <a class="btn ghost" href="#explore">Skip to the live demo</a>
+    <div class="arm3dstage heroStage" id="heroStage">
+      <svg class="fb2d" id="heroArm2d" viewBox="0 0 340 300"></svg>
+      <div class="legend3d"><span>cool</span><span class="bar"></span><span>at limit</span></div>
+      <div class="hint3d">drag to rotate</div>
     </div>
-    <p class="src">Documented in <a href="https://arxiv.org/abs/2503.24278" target="_blank" rel="noopener">AutoEval (arXiv:2503.24278)</a>: eval scores regressed after about 8 hours, attributed to motor overheating, not the policy. The illustrative success line above stands in for that finding.</p>
+    <div class="blame" id="blame"></div>
+    <p class="lead muted" style="margin:6px auto 18px;">An overheating motor records subtly wrong motion. The AI trains and is graded on that data, the score drops, and the policy gets the blame.</p>
+    <div class="row" style="justify-content:center;">
+      <a class="btn" href="#film">Show me how to catch it &darr;</a>
+      <a class="btn ghost" href="#explore">Skip to the demo</a>
+    </div>
+    <p class="src">Documented in <a href="https://arxiv.org/abs/2503.24278" target="_blank" rel="noopener">AutoEval (arXiv:2503.24278)</a>: eval scores regressed after about 8 hours, blamed on motor overheating, not the policy.</p>
   </div>
   <div class="scrollcue">scroll</div>
 </section>
 
-<!-- SCENE 1: PRESS PLAY FILM (3D arm) -->
+<!-- SCENE 1: WATCH ONE ARM -->
 <section class="scene" id="film">
   <div class="inner">
-    <p class="kicker">one arm, 30 days</p>
-    <h2>The robot is the instrument that grades the AI. Nobody checks the instrument.</h2>
-    <p class="lead">Here is arm wx-03 recording its own slow overheating. Press play or scrub the timeline. Two checks read the same sensors the robot already has: a fast gate before every run, and a patient daily trend. Watch which one notices first.</p>
+    <p class="kicker">watch one arm, 30 days</p>
+    <h2>The robot grades the AI. Who checks the robot?</h2>
+    <p class="lead">Scrub the month. Two checks read the same motor sensors: a fast gate before every run, and a patient daily trend. Watch which one catches the heat first.</p>
     <div class="stage">
-      <div class="armwrap arm3dwrap">
-        <div class="arm3dstage" id="filmStage">
-          <canvas id="filmCanvas"></canvas>
-          <svg id="filmArm2d" viewBox="0 0 340 300" style="display:none;height:100%;"></svg>
-          <div class="hud3d">Day <b id="film3dDay">0</b>/30 &middot; <span id="film3dDate"></span></div>
-          <div class="legend3d"><span>cool</span><span class="bar"></span><span>at limit</span></div>
-          <div class="task3d">task: stack the blocks &middot; servos glow by temperature</div>
-          <div class="reset3d" id="film3dReset">reset view</div>
-          <div class="fallback3d" id="film3dFallback">3D needs WebGL; showing the flat view instead.</div>
-        </div>
+      <div class="arm3dstage" id="filmStage">
+        <svg class="fb2d" id="filmArm2d" viewBox="0 0 340 300"></svg>
+        <div class="hud3d">Day <b id="filmDayHud">0</b>/30 &middot; <span id="filmDateHud"></span></div>
+        <div class="legend3d"><span>cool</span><span class="bar"></span><span>at limit</span></div>
+        <div class="reset3d" id="resetView">reset view</div>
+        <div class="hint3d">drag &middot; hover a servo</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:14px;">
         <div class="card"><h3>Pre-flight gate &middot; today's runs</h3><div class="runs" id="filmRuns"></div></div>
-        <div class="card"><h3>Elbow daily trend</h3><svg id="filmTrend" viewBox="0 0 320 120"></svg><div class="tnote" id="filmNote"></div></div>
+        <div class="card"><h3>Elbow temperature, by day</h3><svg id="filmTrend" viewBox="0 0 320 120"></svg><div class="tnote" id="filmNote"></div></div>
       </div>
     </div>
     <div class="controls">
       <button class="btn" id="filmPlay" style="padding:9px 16px;">Pause</button>
       <input type="range" id="filmScrub" min="0" max="29" value="0">
-      <span class="daychip">Day <b id="filmDay">0</b>/30 &middot; <span id="filmDate"></span></span>
       <button class="btn ghost" id="jumpCatch" style="padding:8px 12px;">Jump to the catch</button>
     </div>
   </div>
@@ -171,21 +160,21 @@
 
 <!-- SCENE 2: MAKE THE CALL -->
 <section class="scene" id="call">
-  <div class="inner" style="max-width:760px;">
+  <div class="inner" style="max-width:740px;">
     <p class="kicker" id="callKicker">your call</p>
-    <h2 id="callH">A run is queued. The arm passed its quick check. Collect, or pull?</h2>
-    <p class="lead">The elbow motor has been creeping hotter for two days. The fast gate before this run says go, and nothing visible is wrong. The next data-collection run is ready. Make the call, then see what each check knew.</p>
+    <h2>The elbow is overheating. The quick check still says fine.</h2>
+    <p class="lead">A hot motor cannot hit the torque it is commanded, so the arm's recorded motion drifts and the AI trains on corrupted data. Collect this run, or pull the arm?</p>
     <div class="row" id="callBtns">
-      <button class="btn" data-c="collect">Collect the data</button>
-      <button class="btn ghost" data-c="pull">Pull the robot</button>
+      <button class="btn" data-c="collect">Collect the run</button>
+      <button class="btn ghost" data-c="pull">Pull the arm</button>
     </div>
     <div id="callReveal" style="display:none;margin-top:22px;">
       <div class="split">
-        <div class="card"><h3>The fast pre-flight gate says</h3><div id="callGate"></div></div>
-        <div class="card"><h3>The patient daily trend says</h3><div id="callTrend"></div></div>
+        <div class="card"><h3>Fast pre-flight gate</h3><div id="callGate"></div></div>
+        <div class="card"><h3>Patient daily trend</h3><div id="callTrend"></div></div>
       </div>
       <p class="moneyline" id="callMoney"></p>
-      <div class="row" style="margin-top:16px;"><a class="btn ghost" href="#audit">So why only watch heat? &darr;</a></div>
+      <div class="row" style="margin-top:16px;"><a class="btn ghost" href="#audit">Why watch only heat? &darr;</a></div>
     </div>
   </div>
 </section>
@@ -193,14 +182,13 @@
 <!-- SCENE 3: THE AUDIT -->
 <section class="scene" id="audit">
   <div class="inner">
-    <p class="kicker">the judgment, and the real work</p>
-    <h2>Do not monitor everything. Monitor only what the AI cannot fix itself.</h2>
-    <p class="lead">These robots are closed-loop. They see where the object actually is and adapt, so they shrug off most hardware variation: a tilted camera, a little imprecision. Flagging that is noise. Run every candidate fault through two filters, can the policy compensate, and does it actually recur on this hardware, and watch ten candidates collapse to essentially one proven fault. Knowing what not to build is the work.</p>
+    <p class="kicker">the judgment</p>
+    <h2>Do not monitor everything. Only what the AI cannot fix itself.</h2>
+    <p class="lead">These arms are closed-loop: they watch the object and adapt, so they shrug off most hardware faults. Two filters (can the policy compensate? does it actually recur?) cut ten candidates down to one.</p>
     <div class="row" style="margin-bottom:6px;"><button class="btn" id="runAudit" style="padding:9px 16px;">Run the audit</button>
       <span class="muted" id="auditStatus" style="font-size:13px;"></span></div>
     <div class="faults" id="faults"></div>
-    <p class="lead muted" style="margin-top:16px;">Ten candidates in, one proven fault out, plus one labeled candidate. That restraint is the point. The burden of proof is on inclusion, every cut is documented, and the architecture adds the next fault the day the fleet data earns it.</p>
-    <p class="tnote">Three lower-stakes candidates (comms bus, depth calibration, gearbox backlash) were also evaluated and cut; omitted here for brevity.</p>
+    <p class="tnote" style="margin-top:14px;">One proven fault, one labeled candidate, the rest cut. Every cut is documented; the next fault gets added when fleet data earns it.</p>
   </div>
 </section>
 
@@ -208,8 +196,8 @@
 <section class="scene" id="sandbox">
   <div class="inner">
     <p class="kicker">your turn</p>
-    <h2>Break an arm yourself, then watch the two checks split.</h2>
-    <p class="lead">Pick a joint, how fast it overheats, and what day it starts. Run it. The fast gate keeps passing while the patient trend catches your planted fault, and the tool reports how many days of lead time that buys, without ever inventing a failure date it cannot prove.</p>
+    <h2>Break an arm yourself.</h2>
+    <p class="lead">Overheat any joint, at any speed, starting any day. The gate keeps passing while the trend catches it, and reports the lead time it buys.</p>
     <div class="sandctl">
       <label class="field">overheating joint<br><b><select id="sbJoint"></select></b></label>
       <label class="field" style="min-width:180px;">drift speed<br><input type="range" id="sbRate" min="0" max="12" value="6" step="1"></label>
@@ -217,37 +205,43 @@
       <button class="btn" id="sbRun" style="padding:10px 18px;">Run it</button>
     </div>
     <div class="stage">
-      <div class="armwrap"><svg id="sbArm" viewBox="0 0 340 300"></svg>
-        <div class="legend"><span>cool</span><span class="bar"></span><span>at limit</span></div></div>
+      <div class="arm3dstage" id="sbStage">
+        <svg class="fb2d" id="sbArm2d" viewBox="0 0 340 300"></svg>
+        <div class="hud3d">Day <b id="sbDayHud">0</b>/30 &middot; <span id="sbDateHud"></span></div>
+        <div class="legend3d"><span>cool</span><span class="bar"></span><span>at limit</span></div>
+        <div class="hint3d">drag to rotate</div>
+      </div>
       <div style="display:flex;flex-direction:column;gap:14px;">
         <div class="card"><h3>Pre-flight gate &middot; today</h3><div class="runs" id="sbRuns"></div></div>
         <div class="card"><h3>Daily trend</h3><svg id="sbTrend" viewBox="0 0 320 120"></svg><div class="tnote" id="sbNote"></div></div>
       </div>
     </div>
     <div class="controls"><button class="btn" id="sbPlay" style="padding:9px 16px;">Pause</button>
-      <input type="range" id="sbScrub" min="0" max="29" value="0">
-      <span class="daychip">Day <b id="sbDay">0</b>/30</span></div>
+      <input type="range" id="sbScrub" min="0" max="29" value="0"></div>
   </div>
 </section>
 
 <!-- SCENE 5: EXPLORE THE FLEET -->
 <section class="scene" id="explore">
   <div class="inner">
-    <p class="kicker">the whole fleet</p>
-    <h2>Eight arms, 30 days. Three are breaking, two of them quietly. Find them.</h2>
-    <p class="lead">Click any arm to load its full 30-day story into the view below, the way you just watched wx-03. The data is synthetic so it runs in your browser, but the scoring, the gate, and the drift detection are the real logic.</p>
+    <p class="kicker">the fleet</p>
+    <h2>Eight arms, 30 days. Three are breaking. Find them.</h2>
+    <p class="lead">Click an arm. Three carry a planted fault: a slow creep, a stiffening joint, a sudden spike. See which check catches each.</p>
     <div class="fleet" id="fleet"></div>
     <div class="stage" style="margin-top:16px;">
-      <div class="armwrap"><svg id="exArm" viewBox="0 0 340 300"></svg>
-        <div class="legend"><span id="exLabel" style="font-weight:600;color:var(--ink)"></span><span style="margin-left:auto"></span><span class="bar"></span></div></div>
+      <div class="arm3dstage" id="exStage">
+        <svg class="fb2d" id="exArm2d" viewBox="0 0 340 300"></svg>
+        <div class="hud3d"><b id="exLabel"></b> &middot; day <span id="exDayHud">0</span></div>
+        <div class="legend3d"><span>cool</span><span class="bar"></span><span>at limit</span></div>
+        <div class="hint3d">drag to rotate</div>
+      </div>
       <div style="display:flex;flex-direction:column;gap:14px;">
         <div class="card"><h3>Pre-flight gate &middot; today</h3><div class="runs" id="exRuns"></div></div>
-        <div class="card"><h3>Fault channel, daily trend</h3><svg id="exTrend" viewBox="0 0 320 120"></svg><div class="tnote" id="exNote"></div></div>
+        <div class="card"><h3>Daily trend</h3><svg id="exTrend" viewBox="0 0 320 120"></svg><div class="tnote" id="exNote"></div></div>
       </div>
     </div>
     <div class="controls"><button class="btn" id="exPlay" style="padding:9px 16px;">Pause</button>
       <input type="range" id="exScrub" min="0" max="29" value="0">
-      <span class="daychip">Day <b id="exDay">0</b>/30</span>
       <button class="btn ghost" id="exReroll" style="padding:8px 12px;">New simulation</button></div>
   </div>
 </section>
@@ -256,12 +250,11 @@
 <section class="scene" id="about" style="min-height:auto;">
   <div class="inner about">
     <p class="kicker">what this is</p>
-    <h2>The contribution is the judgment, not the feature count.</h2>
-    <p>I designed and built robot-vitals end to end: an audit that decides which hardware faults are even worth testing on a closed-loop robot and collapses the whole parts list to essentially one that matters, plus a per-run health gate, a patient daily trend detector, a tested Python core, and this live simulation.</p>
-    <p>It proves that on a closed-loop robot only one fault, an overheating motor, silently corrupts the data and is worth a dedicated test. Knowing what not to build, and refusing to print a single number I cannot defend, is the work. Every threshold here traces to a servo datasheet or is labeled illustrative, pending fleet validation.</p>
+    <h2>The judgment is the work, not the feature count.</h2>
+    <p>A health check for the robots that train AI policies. It catches when the robot, not the AI, is quietly corrupting the data, and it only tests the faults that actually do that: one proven (overheating) plus one labeled candidate. Knowing what not to build, and printing no number I cannot defend, is the point. Built end to end by Yash Prakash, with a tested Python core and this live simulation.</p>
     <div class="row" style="margin-top:10px;">
       <a class="btn ghost" href="dashboard.html">Open the engineer's grid view &rarr;</a>
-      <a class="btn ghost" href="https://github.com/Yash-Prakash1/robot-vitals#readme" target="_blank" rel="noopener">Read the full write-up</a>
+      <a class="btn ghost" href="https://github.com/Yash-Prakash1/robot-vitals#readme" target="_blank" rel="noopener">Read the write-up</a>
     </div>
   </div>
 </section>
@@ -303,6 +296,13 @@
   var SEED=SIM.canonical_seed;
   var DS=E.buildDataset(SEED);
   function robotById(ds,id){ return ds.robots.find(function(r){return r.robot_id===id;}); }
+  function armName(id){ return "Arm "+(+String(id).replace("wx-","")); }
+  function profileLabel(p){ return p==="thermal-creep"?"slow overheating":p==="effort-rise"?"stiffening joint":p==="acute-hot-start"?"sudden spike":"healthy"; }
+  function summaryFor(id){ var p=(SIM.fleet.find(function(x){return x.robot_id===id;})||{}).profile;
+    return p==="thermal-creep"?"slow overheating &middot; the trend flags it days before the gate"
+      :p==="effort-rise"?"stiffening joint &middot; only the current channel sees it"
+      :p==="acute-hot-start"?"sudden spike &middot; the per-run gate catches it instantly"
+      :"healthy &middot; both checks stay quiet"; }
   function faultOf(id){ var f=SIM.fleet.find(function(x){return x.robot_id===id;})||{profile:"healthy"};
     if(f.profile==="effort-rise") return {channel:"effort", joint:f.effort_joint};
     if(f.profile==="thermal-creep") return {channel:"thermal", joint:f.creep_joint};
@@ -324,14 +324,41 @@
     return {robot_id:"sandbox", profile:"thermal-creep", runs:runs, maintenance:maint};
   }
 
-  // ---- 2D arm (FK + draw) for hero / sandbox / explore / 3D fallback ----
+  // ---- panels (shared by every scene) ----
+  function runsHTML(rob,day,joint){ var h=""; rob.runs.filter(function(r){return r.day===day;}).forEach(function(r){ var hr=9+r.run_index*2;
+    h+="<div class='run'><span class='t'>"+pad2(hr)+":00</span><span>"+joint+" "+(r.temps_c[joint]).toFixed(1)+" C</span><span class='v "+r.verdict+"'>"+r.verdict+"</span></div>"; }); return h; }
+  function trendSVG(rob,joint,channel,uptoDay){
+    var m=rob.maintenance[joint][channel],series=m.raw,called=firstFlag(m.status_by_day),cap=m.cap_cross_day;
+    var W=320,H=120,pL=30,pR=8,pT=10,pB=18,pw=W-pL-pR,ph=H-pT-pB,lo,hi,unit,dp;
+    if(channel==="thermal"){ lo=BASE[joint]-1; hi=LIM[joint]+2; unit="C"; dp=0; }
+    else { var mn=Math.min.apply(null,series),mx=Math.max.apply(null,series),pdv=(mx-mn)*0.18||0.02; lo=mn-pdv; hi=mx+pdv; unit="A"; dp=2; }
+    var X=function(d){return pL+d/29*pw;}, Y=function(t){return pT+(1-(t-lo)/(hi-lo))*ph;};
+    var pts=[]; for(var d=0;d<=uptoDay;d++) pts.push(X(d).toFixed(1)+","+Y(series[d]).toFixed(1));
+    var s=["<svg viewBox='0 0 "+W+" "+H+"'>",
+      "<text x='2' y='14' font-size='9' fill='#8a94a4'>"+hi.toFixed(dp)+"</text><text x='2' y='"+(H-pB+3)+"' font-size='9' fill='#8a94a4'>"+lo.toFixed(dp)+" "+unit+"</text>"];
+    if(channel==="thermal"){ s.push("<line x1='"+pL+"' y1='"+Y(LIM[joint])+"' x2='"+(W-pR)+"' y2='"+Y(LIM[joint])+"' stroke='#e85d5d' stroke-dasharray='4 3' opacity='.8'/><text x='"+(W-pR)+"' y='"+(Y(LIM[joint])-3)+"' text-anchor='end' font-size='9' fill='#e85d5d'>"+LIM[joint]+" C limit</text>"); }
+    else { s.push("<line x1='"+pL+"' y1='"+Y(m.baseline_mean)+"' x2='"+(W-pR)+"' y2='"+Y(m.baseline_mean)+"' stroke='#8a94a4' stroke-dasharray='4 3' opacity='.6'/><text x='"+(W-pR)+"' y='"+(Y(m.baseline_mean)-3)+"' text-anchor='end' font-size='9' fill='#8a94a4'>baseline current</text>"); }
+    if(called>=0&&uptoDay>=called) s.push("<line x1='"+X(called)+"' y1='"+pT+"' x2='"+X(called)+"' y2='"+(H-pB)+"' stroke='#5a8bff' opacity='.6'/><text x='"+X(called)+"' y='"+(H-6)+"' text-anchor='middle' font-size='8.5' fill='#5a8bff'>called</text>");
+    if(cap!=null&&uptoDay>=cap) s.push("<line x1='"+X(cap)+"' y1='"+pT+"' x2='"+X(cap)+"' y2='"+(H-pB)+"' stroke='#e85d5d' opacity='.5'/><text x='"+X(cap)+"' y='"+(H-6)+"' text-anchor='middle' font-size='8.5' fill='#e85d5d'>cap</text>");
+    s.push("<polyline fill='none' stroke='#39b0ff' stroke-width='2' points='"+pts.join(" ")+"'/>");
+    var lt=series[uptoDay]; s.push("<circle cx='"+X(uptoDay)+"' cy='"+Y(lt)+"' r='3' fill='"+(channel==="thermal"?heat(lt,LIM[joint]):"#39b0ff")+"'/></svg>");
+    return s.join("");
+  }
+  function noteFor(rob,joint,channel,day){
+    var m=rob.maintenance[joint][channel],called=firstFlag(m.status_by_day),cap=m.cap_cross_day;
+    if(called<0) return "The "+joint+" "+(channel==="effort"?"current is steady":"is steady")+". Neither check has anything to flag.";
+    if(day<called) return "The "+joint+" is "+(channel==="effort"?"drawing more current":"creeping up")+". Nothing flagged yet.";
+    if(cap==null||day<cap) return "<b class='call'>Maintenance called day "+called+".</b> Still inside safe limits, so there is time to plan the fix.";
+    return "<b class='call'>Called day "+called+".</b> <b class='cap'>Hit the action cap day "+cap+": book the repair.</b> The quick check never panicked.";
+  }
+
+  // ---- tiny 2D arm, only the WebGL fallback ----
   var SX=170,SY=240,POST=44,A1=70,A2=64,A3=28;
-  function fk(s,e,w){ var Sp={x:SX,y:SY-POST}; var Ej={x:Sp.x+A1*Math.sin(s),y:Sp.y-A1*Math.cos(s)};
-    var a2=s+e,W={x:Ej.x+A2*Math.sin(a2),y:Ej.y-A2*Math.cos(a2)}; var a3=a2+w,H={x:W.x+A3*Math.sin(a3),y:W.y-A3*Math.cos(a3)};
+  function fk(s,e,w){ var Sp={x:SX,y:SY-POST}, Ej={x:Sp.x+A1*Math.sin(s),y:Sp.y-A1*Math.cos(s)};
+    var a2=s+e,W={x:Ej.x+A2*Math.sin(a2),y:Ej.y-A2*Math.cos(a2)}, a3=a2+w,H={x:W.x+A3*Math.sin(a3),y:W.y-A3*Math.cos(a3)};
     return {Sp:Sp,E:Ej,W:W,H:H,a3:a3}; }
   var POSES=[[0.5,0.85,0.5,1],[1.0,0.55,0.8,1],[1.0,0.55,0.8,1],[0.65,1.0,0.45,0],[0.18,1.15,0.4,0],[0.18,1.15,0.4,1],[0.5,0.85,0.5,1]];
-  function poseAt(p){ var n=POSES.length-1,x=p*n,i=Math.min(Math.floor(x),n-1),f=x-i;
-    var ease=f<0.5?2*f*f:1-Math.pow(-2*f+2,2)/2; var A=POSES[i],Bp=POSES[i+1];
+  function poseAt(p){ var n=POSES.length-1,x=p*n,i=Math.min(Math.floor(x),n-1),f=x-i,ease=f<0.5?2*f*f:1-Math.pow(-2*f+2,2)/2,A=POSES[i],Bp=POSES[i+1];
     return [lerp(A[0],Bp[0],ease),lerp(A[1],Bp[1],ease),lerp(A[2],Bp[2],ease),lerp(A[3],Bp[3],ease)]; }
   function armSVG(phase,temps,faultJoint){
     var ps=poseAt(phase),pos=fk(ps[0],ps[1],ps[2]),grip=ps[3],Sp=pos.Sp,Ej=pos.E,W=pos.W,H=pos.H;
@@ -357,78 +384,15 @@
       tip.innerHTML="<b>"+c.getAttribute("data-name")+"</b> &middot; "+t.toFixed(1)+" C<br><span style='color:#8a94a4'>limit "+lim+" C &middot; headroom "+E.thermalHeadroomScore(t,lim).toFixed(0)+"/100</span>"; });
     c.addEventListener("mouseleave",function(){ tip.style.opacity=0; }); }); }
 
-  // ---- panels ----
-  function runsHTML(rob,day,joint){ var h=""; rob.runs.filter(function(r){return r.day===day;}).forEach(function(r){ var hr=9+r.run_index*2;
-    h+="<div class='run'><span class='t'>"+pad2(hr)+":00</span><span>"+joint+" "+(r.temps_c[joint]).toFixed(1)+" C</span><span class='v "+r.verdict+"'>"+r.verdict+"</span></div>"; }); return h; }
-  function trendSVG(rob,joint,channel,uptoDay){
-    var m=rob.maintenance[joint][channel],series=m.raw,called=firstFlag(m.status_by_day),cap=m.cap_cross_day;
-    var W=320,H=120,pL=30,pR=8,pT=10,pB=18,pw=W-pL-pR,ph=H-pT-pB,lo,hi,unit,dp;
-    if(channel==="thermal"){ lo=BASE[joint]-1; hi=LIM[joint]+2; unit="C"; dp=0; }
-    else { var mn=Math.min.apply(null,series),mx=Math.max.apply(null,series),pdv=(mx-mn)*0.18||0.02; lo=mn-pdv; hi=mx+pdv; unit="A"; dp=2; }
-    var X=function(d){return pL+d/29*pw;}, Y=function(t){return pT+(1-(t-lo)/(hi-lo))*ph;};
-    var pts=[]; for(var d=0;d<=uptoDay;d++) pts.push(X(d).toFixed(1)+","+Y(series[d]).toFixed(1));
-    var s=["<svg viewBox='0 0 "+W+" "+H+"'>",
-      "<text x='2' y='14' font-size='9' fill='#8a94a4'>"+hi.toFixed(dp)+"</text><text x='2' y='"+(H-pB+3)+"' font-size='9' fill='#8a94a4'>"+lo.toFixed(dp)+" "+unit+"</text>"];
-    if(channel==="thermal"){ s.push("<line x1='"+pL+"' y1='"+Y(LIM[joint])+"' x2='"+(W-pR)+"' y2='"+Y(LIM[joint])+"' stroke='#e85d5d' stroke-dasharray='4 3' opacity='.8'/><text x='"+(W-pR)+"' y='"+(Y(LIM[joint])-3)+"' text-anchor='end' font-size='9' fill='#e85d5d'>"+LIM[joint]+" C limit</text>"); }
-    else { s.push("<line x1='"+pL+"' y1='"+Y(m.baseline_mean)+"' x2='"+(W-pR)+"' y2='"+Y(m.baseline_mean)+"' stroke='#8a94a4' stroke-dasharray='4 3' opacity='.6'/><text x='"+(W-pR)+"' y='"+(Y(m.baseline_mean)-3)+"' text-anchor='end' font-size='9' fill='#8a94a4'>baseline current</text>"); }
-    if(called>=0&&uptoDay>=called) s.push("<line x1='"+X(called)+"' y1='"+pT+"' x2='"+X(called)+"' y2='"+(H-pB)+"' stroke='#5a8bff' opacity='.6'/><text x='"+X(called)+"' y='"+(H-6)+"' text-anchor='middle' font-size='8.5' fill='#5a8bff'>called</text>");
-    if(cap!=null&&uptoDay>=cap) s.push("<line x1='"+X(cap)+"' y1='"+pT+"' x2='"+X(cap)+"' y2='"+(H-pB)+"' stroke='#e85d5d' opacity='.5'/><text x='"+X(cap)+"' y='"+(H-6)+"' text-anchor='middle' font-size='8.5' fill='#e85d5d'>cap</text>");
-    s.push("<polyline fill='none' stroke='#39b0ff' stroke-width='2' points='"+pts.join(" ")+"'/>");
-    var lt=series[uptoDay]; s.push("<circle cx='"+X(uptoDay)+"' cy='"+Y(lt)+"' r='3' fill='"+(channel==="thermal"?heat(lt,LIM[joint]):"#39b0ff")+"'/></svg>");
-    return s.join("");
-  }
-  function noteFor(rob,joint,channel,day){
-    var m=rob.maintenance[joint][channel],called=firstFlag(m.status_by_day),cap=m.cap_cross_day;
-    var word=channel==="effort"?"drawing more current":"creeping up";
-    if(called<0) return "The "+joint+" "+(channel==="effort"?"current is steady":"temperature is steady")+". Neither check has anything to flag.";
-    if(day<called) return "The "+joint+" is "+word+". Nothing flagged yet.";
-    if(cap==null||day<cap) return "<b class='call'>Maintenance called day "+called+" ("+dstr(called)+").</b> Still inside safe limits, so there is time to plan the fix.";
-    return "<b class='call'>Called day "+called+".</b> <b class='cap'>Crossed the action cap day "+cap+": book the repair.</b> The quick check never panicked.";
-  }
-
-  // ---- a reusable scrubbable view (2D arm, 3D arm, thermal or effort channel) ----
-  function makeView(opts){
-    var rob=opts.robot,joint=opts.joint,channel=opts.channel||"thermal";
-    var arm3d=opts.arm3d||null,svgId=opts.arm||null;
-    var runsEl=opts.runs?$(opts.runs):null,trendId=opts.trend,noteEl=opts.note?$(opts.note):null,
-        scrub=opts.scrub?$(opts.scrub):null,playBtn=opts.play?$(opts.play):null,dayEl=opts.dayEl?$(opts.dayEl):null,dateEl=opts.dateEl?$(opts.dateEl):null;
-    var day=0,phase=0,playing=false,acc=0,last=0,raf=null;
-    function renderArm(){ var temps=tempsAt(rob,day);
-      if(arm3d){ arm3d.update(day,dstr(day),temps); }
-      else if(svgId){ var el=$(svgId); el.innerHTML=armSVG(phase,temps,joint); bindHover(el); } }
-    function renderPanels(){ if(dayEl)dayEl.textContent=day; if(dateEl)dateEl.textContent=dstr(day);
-      if(runsEl)runsEl.innerHTML=runsHTML(rob,day,joint);
-      if(trendId){ var t=$(trendId); if(t) t.outerHTML=trendSVG(rob,joint,channel,day).replace("<svg ","<svg id='"+trendId+"' "); }
-      if(noteEl) noteEl.innerHTML=noteFor(rob,joint,channel,day); }
-    function frame(ts){ if(!last)last=ts; var dt=(ts-last)/1000; last=ts;
-      if(playing){ phase=(phase+dt*0.34)%1; if(!arm3d) renderArm();
-        acc+=dt; if(acc>0.85){ acc=0; day=(day+1)%30; if(scrub)scrub.value=day; renderPanels(); if(arm3d) renderArm(); } }
-      raf=requestAnimationFrame(frame); }
-    function setPlaying(p){ playing=p; if(playBtn)playBtn.textContent=p?"Pause":"Play"; last=0; }
-    if(scrub)scrub.addEventListener("input",function(){ day=+this.value; renderPanels(); renderArm(); });
-    if(playBtn)playBtn.addEventListener("click",function(){ setPlaying(!playing); });
-    var api={ start:function(){ if(!raf)raf=requestAnimationFrame(frame); setPlaying(true); if(arm3d)arm3d.start(); },
-      stop:function(){ setPlaying(false); if(arm3d)arm3d.stop(); if(raf){cancelAnimationFrame(raf); raf=null;} },
-      goto:function(d){ day=d; if(scrub)scrub.value=d; renderPanels(); renderArm(); },
-      reload:function(newRob,newJoint,newChannel){ rob=newRob; if(newJoint)joint=newJoint; if(newChannel)channel=newChannel; day=0; if(scrub)scrub.value=0; renderPanels(); renderArm(); },
-      get day(){return day;}, get robot(){return rob;} };
-    renderArm(); renderPanels(); return api;
-  }
-
-  // ================= the 3D WidowX arm (film centerpiece) =================
-  function makeArm3D(o){
-    var canvas=$(o.canvas),stage=$(o.stage),fallback=$(o.fallback),hudDay=$(o.day),hudDate=$(o.date);
-    if(typeof THREE==="undefined"){ if(fallback)fallback.style.display="flex"; return null; }
-    var renderer;
-    try{ renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true,alpha:true}); }
-    catch(e){ if(fallback)fallback.style.display="flex"; return null; }
-    var errShown=false;
-    function reportErr(){ if(errShown)return; errShown=true; if(fallback){ fallback.textContent="3D hit an error; the gate and trend on the right still run."; fallback.style.display="flex"; } }
-
+  // ================= ONE shared 3D WidowX arm; its canvas hops between scenes =================
+  function makeArm3D(){
+    if(typeof THREE==="undefined") return null;
+    var canvas=document.createElement("canvas"); canvas.className="arm3dcanvas";
+    var renderer; try{ renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true,alpha:true}); }catch(e){ return null; }
+    var errShown=false; function reportErr(){ errShown=true; }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
     renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-    var scene=new THREE.Scene();
-    var camera=new THREE.PerspectiveCamera(40,1,0.1,100);
+    var scene=new THREE.Scene(), camera=new THREE.PerspectiveCamera(40,1,0.1,100);
     scene.add(new THREE.HemisphereLight(0x9fb6ff,0x0a0d12,0.5));
     var key=new THREE.DirectionalLight(0xffffff,1.05); key.position.set(5,9,5); key.castShadow=true;
     key.shadow.mapSize.set(1024,1024); key.shadow.camera.near=1; key.shadow.camera.far=30;
@@ -458,21 +422,17 @@
     var shR=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.62,0.66),servoMat()); shR.position.x=0.34; shR.castShadow=true; shoulderPivot.add(shR);
     shoulderPivot.add(rail(L1,0.26));
     var elbowPivot=new THREE.Group(); elbowPivot.position.y=L1; shoulderPivot.add(elbowPivot);
-    elbowPivot.add(servo("elbow",0.5,0.56,0.62,true));
-    elbowPivot.add(rail(L2,0.22));
+    elbowPivot.add(servo("elbow",0.5,0.56,0.62,true)); elbowPivot.add(rail(L2,0.22));
     var foreS=servo("forearm_roll",0.3,0.34,0.34,false); foreS.position.y=L2*0.55; elbowPivot.add(foreS);
     var wristPivot=new THREE.Group(); wristPivot.position.y=L2; elbowPivot.add(wristPivot);
     wristPivot.add(servo("wrist_angle",0.4,0.42,0.46,true));
-    var wr=servo("wrist_rotate",0.3,0.3,0.3,false); wr.position.y=0.32; wristPivot.add(wr);
+    var wrr=servo("wrist_rotate",0.3,0.3,0.3,false); wrr.position.y=0.32; wristPivot.add(wrr);
     var gripBase=servo("gripper",0.36,0.22,0.42,false); gripBase.position.y=0.52; wristPivot.add(gripBase);
     function finger(sx){ var f=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.4,0.18),fingerMat()); f.position.set(sx,0.78,0); f.castShadow=true; wristPivot.add(f); return f; }
     var fL=finger(-0.15), fR=finger(0.15);
-    var GLEN=0.95;
-    var graspAnchor=new THREE.Object3D(); graspAnchor.position.y=GLEN; wristPivot.add(graspAnchor);
+    var GLEN=0.95, graspAnchor=new THREE.Object3D(); graspAnchor.position.y=GLEN; wristPivot.add(graspAnchor);
 
-    var BH=0.34,GAP=0.015,MAX=4;
-    var SROW={x0:1.2,dx:0.42,z:0.95}, stackPos=new THREE.Vector3(1.2,0,-1.05);
-    var TRAYTOP=0.05,PADTOP=0.05;
+    var BH=0.34,GAP=0.015,MAX=4, SROW={x0:1.2,dx:0.42,z:0.95}, stackPos=new THREE.Vector3(1.2,0,-1.05), TRAYTOP=0.05,PADTOP=0.05;
     var pad=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.05,0.6),new THREE.MeshStandardMaterial({color:0x222a36,metalness:0.2,roughness:0.9}));
     pad.position.set(stackPos.x,0.025,stackPos.z); pad.receiveShadow=true; scene.add(pad);
     var tray=new THREE.Mesh(new THREE.BoxGeometry(MAX*SROW.dx+0.2,0.05,0.5),new THREE.MeshStandardMaterial({color:0x171c24,metalness:0.3,roughness:0.85}));
@@ -516,20 +476,21 @@
     var az=0.65,el=0.42,rad=8.6,target=new THREE.Vector3(0,1.7,0),autoRot=true;
     function place(){ camera.position.set(target.x+rad*Math.cos(el)*Math.sin(az),target.y+rad*Math.sin(el),target.z+rad*Math.cos(el)*Math.cos(az)); camera.lookAt(target); }
     var dragging=false,lx=0,ly=0;
-    stage.addEventListener("pointerdown",function(e){ dragging=true; autoRot=false; lx=e.clientX; ly=e.clientY; });
+    canvas.addEventListener("pointerdown",function(e){ dragging=true; autoRot=false; lx=e.clientX; ly=e.clientY; });
     window.addEventListener("pointerup",function(){ dragging=false; });
     window.addEventListener("pointermove",function(e){ if(dragging){ az-=(e.clientX-lx)*0.008; el=clamp(el+(e.clientY-ly)*0.006,0.06,1.3); lx=e.clientX; ly=e.clientY; place(); } else onHover(e); });
-    if($(o.reset))$(o.reset).addEventListener("click",function(){ az=0.65; el=0.42; autoRot=true; place(); });
 
     var rayc=new THREE.Raycaster(),mouse=new THREE.Vector2();
-    function onHover(e){ var r=canvas.getBoundingClientRect(); if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom){tip.style.opacity=0;return;}
+    function onHover(e){ var r=canvas.getBoundingClientRect(); if(!r.width||e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom){tip.style.opacity=0;return;}
       mouse.x=((e.clientX-r.left)/r.width)*2-1; mouse.y=-((e.clientY-r.top)/r.height)*2+1; rayc.setFromCamera(mouse,camera);
       var hits=rayc.intersectObjects(Object.keys(servoMeshes).map(function(k){return servoMeshes[k];}));
       if(hits.length){ var name=hits[0].object.userData.joint,j=JOINTS.find(function(x){return x.name===name;}),t=curTemps[name];
         tip.style.opacity=1; tip.style.left=e.clientX+"px"; tip.style.top=e.clientY+"px";
         tip.innerHTML="<b>"+name+"</b> &middot; "+(t==null?"?":t.toFixed(1))+" C<br><span style='color:#8a94a4'>limit "+j.limit+" C &middot; headroom "+(t==null?"":E.thermalHeadroomScore(t,j.limit).toFixed(0)+"/100")+"</span>"; } else tip.style.opacity=0; }
 
-    function resize(){ var w=stage.clientWidth,h=stage.clientHeight; if(!w||!h)return; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
+    var mountEl=null;
+    function resize(){ if(!mountEl)return; var w=mountEl.clientWidth,h=mountEl.clientHeight; if(!w||!h)return; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
+    function render1(){ try{ renderer.render(scene,camera); }catch(e){ reportErr(); } }
     window.addEventListener("resize",resize);
 
     var running=false,raf=null,lastT=0;
@@ -538,125 +499,145 @@
       }catch(err){ reportErr(); }
       if(running) raf=requestAnimationFrame(loop); else raf=null; }
 
-    resize(); place(); applyHeat();
+    place();
     return {
-      update:function(day,dateStr,temps){ curTemps=temps; if(hudDay)hudDay.textContent=day; if(hudDate)hudDate.textContent=dateStr; applyHeat();
-        if(!running){ try{ renderer.render(scene,camera); }catch(e){ reportErr(); } } },
+      current:null,
+      mount:function(el){ if(mountEl===el)return; mountEl=el; el.appendChild(canvas); resize(); render1(); },
+      setTemps:function(t){ curTemps=t; applyHeat(); if(!running) render1(); },
       start:function(){ resize(); if(!running){ running=true; lastT=0; raf=requestAnimationFrame(loop); } },
-      stop:function(){ running=false; }
+      stop:function(){ running=false; if(raf){ cancelAnimationFrame(raf); raf=null; } },
+      resetView:function(){ az=0.65; el=0.42; autoRot=true; place(); render1(); }
+    };
+  }
+  var ARM=makeArm3D();
+  if(!ARM){ Array.prototype.forEach.call(document.querySelectorAll(".fb2d"),function(s){ s.style.display="block"; }); }
+  if($("resetView")) $("resetView").addEventListener("click",function(){ if(ARM)ARM.resetView(); });
+
+  // ---- one scrubbable view per arm scene; only the on-screen one drives the shared arm ----
+  function makeView(opts){
+    var rob=opts.robot, joint=opts.joint, channel=opts.channel||"thermal", id=opts.id, stageEl=opts.stage?$(opts.stage):null, fbId=opts.fb;
+    var runsEl=opts.runs?$(opts.runs):null, trendId=opts.trend, noteEl=opts.note?$(opts.note):null,
+        scrub=opts.scrub?$(opts.scrub):null, playBtn=opts.play?$(opts.play):null, hudDay=opts.hudDay?$(opts.hudDay):null, hudDate=opts.hudDate?$(opts.hudDate):null;
+    var dayDur=opts.dayDur||0.85, onDay=opts.onDay||null, day=0,phase=0,playing=false,acc=0,last=0,raf=null;
+    function pushArm(){ var temps=tempsAt(rob,day);
+      if(ARM){ if(ARM.current===id) ARM.setTemps(temps); }
+      else if(fbId){ var el=$(fbId); el.innerHTML=armSVG(phase,temps,joint); bindHover(el); } }
+    function panels(){ if(hudDay)hudDay.textContent=day; if(hudDate)hudDate.textContent=dstr(day);
+      if(runsEl)runsEl.innerHTML=runsHTML(rob,day,joint);
+      if(trendId){ var t=$(trendId); if(t) t.outerHTML=trendSVG(rob,joint,channel,day).replace("<svg ","<svg id='"+trendId+"' "); }
+      if(noteEl) noteEl.innerHTML=noteFor(rob,joint,channel,day); if(onDay) onDay(day); }
+    function frame(ts){ if(!last)last=ts; var dt=(ts-last)/1000; last=ts;
+      if(playing){ phase=(phase+dt*0.34)%1; if(!ARM) pushArm();
+        acc+=dt; if(acc>dayDur){ acc=0; day=(day+1)%30; if(scrub)scrub.value=day; panels(); pushArm(); } }
+      raf=requestAnimationFrame(frame); }
+    function setPlaying(p){ playing=p; if(playBtn)playBtn.textContent=p?"Pause":"Play"; last=0; }
+    if(scrub)scrub.addEventListener("input",function(){ day=+this.value; panels(); pushArm(); });
+    if(playBtn)playBtn.addEventListener("click",function(){ setPlaying(!playing); });
+    panels(); pushArm();
+    return {
+      id:id, stage:stageEl,
+      play:function(){ if(!raf)raf=requestAnimationFrame(frame); setPlaying(true); },
+      pause:function(){ setPlaying(false); if(raf){ cancelAnimationFrame(raf); raf=null; } },
+      attach:function(){ if(ARM&&stageEl){ ARM.current=id; ARM.mount(stageEl); ARM.setTemps(tempsAt(rob,day)); ARM.start(); } },
+      goto:function(d){ day=d; if(scrub)scrub.value=d; panels(); pushArm(); },
+      reload:function(nr,nj,nc){ rob=nr; if(nj)joint=nj; if(nc)channel=nc; day=0; if(scrub)scrub.value=0; panels(); pushArm(); },
+      get day(){return day;}, get robot(){return rob;}
     };
   }
 
-  // ---------- SCENE 0: hero ----------
-  (function hero(){
-    var rob=robotById(DS,"wx-03"),arm=$("heroArm"),lines=$("heroLines"),blame=$("blame");
-    var hphase=0,hday=0,hlast=0,hacc=0,running=true,raf=null;
-    var elbowRaw=rob.maintenance.elbow.thermal.raw;
-    var loT=BASE.elbow-1, hiT=LIM.elbow; // axis bounds from config, not literals
-    function lineSVG(day){ var W=440,H=120,pad=24,pw=W-pad*2,ph=H-pad*2;
-      var X=function(d){return pad+d/29*pw;}, tY=function(t){return pad+(1-(t-loT)/(hiT-loT))*ph;};
-      var tp=[],sp=[]; for(var d=0;d<=day;d++){ tp.push(X(d).toFixed(1)+","+tY(elbowRaw[d]).toFixed(1));
-        var succ=92-Math.max(0,d-9)*1.6; sp.push(X(d).toFixed(1)+","+(pad+(1-(succ-55)/(95-55))*ph).toFixed(1)); }
-      return "<svg viewBox='0 0 "+W+" "+H+"'>"
-        +"<polyline fill='none' stroke='#e85d5d' stroke-width='2.5' points='"+tp.join(" ")+"'/>"
-        +"<polyline fill='none' stroke='#8a94a4' stroke-width='2' stroke-dasharray='3 3' points='"+sp.join(" ")+"'/>"
-        +"<text x='"+(W-pad)+"' y='"+(tY(elbowRaw[day])-6)+"' text-anchor='end' font-size='10' fill='#e85d5d'>motor temperature</text>"
-        +"<text x='"+(W-pad)+"' y='"+(pad+(1-((92-Math.max(0,day-9)*1.6)-55)/(95-55))*ph+13)+"' text-anchor='end' font-size='10' fill='#8a94a4'>AI eval (illustrative)</text></svg>"; }
-    function hframe(ts){ if(!running)return; if(!hlast)hlast=ts; var dt=(ts-hlast)/1000; hlast=ts; hphase=(hphase+dt*0.4)%1;
-      arm.innerHTML=armSVG(hphase,tempsAt(rob,hday),"elbow");
-      hacc+=dt; if(hacc>0.18){ hacc=0; hday=(hday+1)%30; lines.innerHTML=lineSVG(hday);
-        blame.innerHTML = hday<11 ? "<span style='color:#8a94a4'>Every reading looks fine.</span>"
-          : (hday<22 ? "<span style='color:#e85d5d'>The policy regressed. Pull the model?</span>"
-          : "<span style='color:#2fb36a'>No. The motor overheated. The data was corrupt.</span>"); }
-      raf=requestAnimationFrame(hframe); }
-    var heroApi={ start:function(){ if(!running){running=true;hlast=0;raf=requestAnimationFrame(hframe);} }, stop:function(){ running=false; if(raf){cancelAnimationFrame(raf); raf=null;} } };
-    window.__heroApi=heroApi; heroApi.start();
-  })();
-
-  // ---------- SCENE 1: film (3D arm) ----------
+  // ---- precompute wx-03 narrative numbers from the engine ----
   var wx03=robotById(DS,"wx-03"), wx03m=wx03.maintenance.elbow.thermal;
   var CALLED=firstFlag(wx03m.status_by_day), CAP=wx03m.cap_cross_day, GATEWARN=firstGateWarn(wx03);
   var GATELEAD=(GATEWARN<0?30:GATEWARN)-CALLED;
-  var arm3d=makeArm3D({canvas:"filmCanvas",stage:"filmStage",day:"film3dDay",date:"film3dDate",fallback:"film3dFallback",reset:"film3dReset"});
-  var filmOpts={robot:wx03,joint:"elbow",channel:"thermal",runs:"filmRuns",trend:"filmTrend",note:"filmNote",scrub:"filmScrub",play:"filmPlay",dayEl:"filmDay",dateEl:"filmDate"};
-  if(arm3d){ filmOpts.arm3d=arm3d; } else { $("filmCanvas").style.display="none"; $("filmArm2d").style.display="block"; filmOpts.arm="filmArm2d"; }
-  var film=makeView(filmOpts);
-  $("jumpCatch").textContent="Jump to the catch (day "+CALLED+")";
-  $("jumpCatch").addEventListener("click",function(){ film.goto(CALLED); $("call").scrollIntoView({behavior:"smooth"}); });
 
-  // ---------- SCENE 2: make the call ----------
+  var views={};
+
+  // SCENE 0: hero (3D arm + blame ticker, no panels)
+  views.hero=makeView({ id:"hero", robot:wx03, joint:"elbow", stage:"heroStage", fb:"heroArm2d", dayDur:0.4,
+    onDay:function(d){ $("blame").innerHTML = d<11 ? "<span style='color:#8a94a4'>Every reading looks normal.</span>"
+      : (d<22 ? "<span style='color:#e85d5d'>The policy regressed. Pull the model?</span>"
+      : "<span style='color:#2fb36a'>No. The motor overheated. The data was corrupt.</span>"); } });
+
+  // SCENE 1: film
+  views.film=makeView({ id:"film", robot:wx03, joint:"elbow", stage:"filmStage", fb:"filmArm2d",
+    runs:"filmRuns", trend:"filmTrend", note:"filmNote", scrub:"filmScrub", play:"filmPlay", hudDay:"filmDayHud", hudDate:"filmDateHud" });
+  $("jumpCatch").textContent="Jump to the catch (day "+CALLED+")";
+  $("jumpCatch").addEventListener("click",function(){ views.film.goto(CALLED); $("call").scrollIntoView({behavior:"smooth"}); });
+
+  // SCENE 2: make the call
   $("callKicker").innerHTML="day "+CALLED+" &middot; your call";
   var callDone=false;
   Array.prototype.forEach.call(document.querySelectorAll("#callBtns .btn"),function(b){
     b.addEventListener("click",function(){ if(callDone)return; callDone=true; var choice=b.getAttribute("data-c");
-      $("callGate").innerHTML="<span class='verdictbig v PASS'>PASS &middot; collect</span><p class='tnote'>All seven joints are inside their per-run limits. The fast check sees nothing wrong today, and would keep saying collect for "+GATELEAD+" more days.</p>";
-      $("callTrend").innerHTML="<span class='verdictbig v WARN'>already flagged</span><p class='tnote'>The patient daily trend tripped on <b class='call'>day "+CALLED+"</b> and called for maintenance. It will not cross the action cap (the plan-the-repair line, set safely below the hardware limit) until day "+CAP+", so you have "+(CAP-CALLED)+" days to schedule a fix.</p>";
-      $("callMoney").innerHTML=(choice==="pull"?"Good call. ":"If you collected, you are in good company, and that is the trap. ")+"The fast check said go, so it felt safe, and you would have banked <span class='hlr'>days of quietly corrupted data</span> before anything warned you. The patient trend already knew. <span class='hl'>Same sensors, two timescales.</span>";
-      $("callReveal").style.display="block"; $("callBtns").style.opacity=".5";
-      $("callReveal").scrollIntoView({behavior:"smooth",block:"nearest"}); });
+      $("callGate").innerHTML="<span class='verdictbig v PASS'>PASS</span><p class='tnote'>Within every per-run limit, and it stays clear for "+GATELEAD+" more days.</p>";
+      $("callTrend").innerHTML="<span class='verdictbig v WARN'>already flagged</span><p class='tnote'>Called maintenance on <b class='call'>day "+CALLED+"</b>, with "+(CAP-CALLED)+" days of lead before any run fails.</p>";
+      $("callMoney").innerHTML=(choice==="pull"?"Good call. ":"Collecting felt safe, and that is the trap. ")+"You would have banked <span class='hlr'>days of corrupted data</span> before anything warned you. The slow trend already knew. <span class='hl'>Same sensors, two timescales.</span>";
+      $("callReveal").style.display="block"; $("callBtns").style.opacity=".5"; $("callReveal").scrollIntoView({behavior:"smooth",block:"nearest"}); });
   });
 
-  // ---------- SCENE 3: audit ----------
+  // SCENE 3: audit
   var FAULTS=[
-    {n:"Motor overheating",v:"keep",r:"A hot motor cannot deliver the torque it is told to, and no camera can see that. AutoEval measured an eval regression from exactly this, on this arm. This is the one."},
-    {n:"Motor effort and wear",v:"cand",r:"A binding joint corrupts motion the same silent way. The physics is certain, the rate it wears on these gears is not, so it ships labeled a candidate, not claimed."},
+    {n:"Motor overheating",v:"keep",r:"A hot motor cannot deliver the torque it is told to, and no camera can see that. AutoEval measured an eval regression from exactly this, on this arm."},
+    {n:"Motor effort and wear",v:"cand",r:"A binding joint corrupts motion the same silent way. The physics is certain, the rate it wears on these gears is not, so it ships labeled a candidate."},
     {n:"Voltage sag",v:"sec",r:"Real but rare and usually noticed. Kept only as a free secondary read off a register already on the bus. No test built for it."},
-    {n:"Camera tilt",v:"cut",r:"A shifted view is exactly the variation the policy is built to handle. Flagging it would fight the whole point of a closed-loop model."},
-    {n:"Pose accuracy",v:"cut",r:"Testing open-loop precision on a closed-loop robot. The policy watches the object and adapts, it never reaches a memorized pose. Wrong test for this robot."},
+    {n:"Camera tilt",v:"cut",r:"A shifted view is exactly the variation the policy is built to handle. Flagging it fights the whole point of a closed-loop model."},
+    {n:"Pose accuracy",v:"cut",r:"Open-loop precision on a closed-loop robot. The policy watches the object and adapts, it never reaches a memorized pose."},
     {n:"Encoder drift",v:"cut",r:"Contactless magnetic encoder, no wear surface. It fails abruptly, so there is no slow climb for a trend detector to catch."},
-    {n:"Gripper pad wear",v:"cut",r:"Designed the test in full, then cut it on frequency: these pads are not documented to wear here, and a slip shows up in the recording anyway. Chose not to, not could not."}
+    {n:"Gripper pad wear",v:"cut",r:"Designed the test in full, then cut on frequency: these pads are not documented to wear here, and a slip shows up in the recording anyway."}
   ];
   (function(){ var box=$("faults"); FAULTS.forEach(function(f,i){ box.insertAdjacentHTML("beforeend",
     "<div class='fault' id='f"+i+"'><div class='fn'>"+f.n+"</div><div class='fr'>"+f.r+"</div></div>"); }); })();
   var auditRan=false;
   $("runAudit").addEventListener("click",function(){ if(auditRan)return; auditRan=true; this.disabled=true; $("auditStatus").textContent="filtering...";
-    FAULTS.forEach(function(f,i){ setTimeout(function(){ var el=$("f"+i);
-      if(f.v==="cut"){ el.className="fault gone"; el.querySelector(".fr").innerHTML=f.r+" <span class='tag cut'>CUT</span>"; }
-      else if(f.v==="keep"){ el.className="fault keep"; el.querySelector(".fr").innerHTML=f.r+" <span class='tag keep'>KEEP &middot; PROVEN</span>"; }
-      else if(f.v==="sec"){ el.className="fault sec"; el.querySelector(".fr").innerHTML=f.r+" <span class='tag sec'>SECONDARY READ</span>"; }
-      else { el.className="fault cand"; el.querySelector(".fr").innerHTML=f.r+" <span class='tag cand'>CANDIDATE</span>"; }
-      if(i===FAULTS.length-1)$("auditStatus").textContent="One proven fault, one labeled candidate, one free secondary read. The rest are noise on a closed-loop robot.";
-    }, 320*(i+1)); }); });
+    FAULTS.forEach(function(f,i){ setTimeout(function(){ var el=$("f"+i),fr=el.querySelector(".fr");
+      if(f.v==="cut"){ el.className="fault gone"; fr.innerHTML=f.r+" <span class='tag cut'>CUT</span>"; }
+      else if(f.v==="keep"){ el.className="fault keep"; fr.innerHTML=f.r+" <span class='tag keep'>KEEP &middot; PROVEN</span>"; }
+      else if(f.v==="sec"){ el.className="fault sec"; fr.innerHTML=f.r+" <span class='tag sec'>SECONDARY READ</span>"; }
+      else { el.className="fault cand"; fr.innerHTML=f.r+" <span class='tag cand'>CANDIDATE</span>"; }
+      if(i===FAULTS.length-1)$("auditStatus").textContent="One proven fault, one labeled candidate. The rest are noise on a closed-loop robot.";
+    }, 300*(i+1)); }); });
 
-  // ---------- SCENE 4: sandbox ----------
+  // SCENE 4: sandbox
   (function(){ var js=$("sbJoint"); JOINTS.forEach(function(j){ js.insertAdjacentHTML("beforeend","<option value='"+j.name+"'"+(j.name==="elbow"?" selected":"")+">"+j.name+"</option>"); });
     var os=$("sbOnset"); for(var d=4;d<=16;d+=2)os.insertAdjacentHTML("beforeend","<option value='"+d+"'"+(d===10?" selected":"")+">day "+d+"</option>"); })();
   function sbCfg(){ return {robot_id:"sandbox",profile:"thermal-creep",creep_joint:$("sbJoint").value,creep_onset_day:+$("sbOnset").value,creep_rate_c_per_day:((+$("sbRate").value)/10)||0.05}; }
-  var sbJoint=$("sbJoint").value;
-  var sb=makeView({robot:customArm(sbCfg(),SEED+101,sbJoint),joint:sbJoint,channel:"thermal",arm:"sbArm",runs:"sbRuns",trend:"sbTrend",note:"sbNote",scrub:"sbScrub",play:"sbPlay",dayEl:"sbDay"});
-  var sbSeed=SEED+101;
-  $("sbRun").addEventListener("click",function(){ sbSeed+=7; sbJoint=$("sbJoint").value; var cfg=sbCfg();
-    sb.reload(customArm(cfg,sbSeed,sbJoint),sbJoint,"thermal"); sb.stop(); sb.goto(29);
-    var m=sb.robot.maintenance[sbJoint].thermal,called=firstFlag(m.status_by_day),cap=m.cap_cross_day;
-    $("sbNote").innerHTML = called<0 ? "This drift was too slow to flag in 30 days. Try a faster rate or an earlier start."
-      : "<b class='call'>Your fault was caught on day "+called+".</b>"+(cap!=null?" It crossed the action cap on day "+cap+", a "+(cap-called)+"-day head start." : " It never got bad enough to pull a run in 30 days, so the trend bought you the whole month."); });
+  var sbJoint=$("sbJoint").value, sbSeed=SEED+101;
+  views.sandbox=makeView({ id:"sandbox", robot:customArm(sbCfg(),sbSeed,sbJoint), joint:sbJoint, channel:"thermal", stage:"sbStage", fb:"sbArm2d",
+    runs:"sbRuns", trend:"sbTrend", note:"sbNote", scrub:"sbScrub", play:"sbPlay", hudDay:"sbDayHud", hudDate:"sbDateHud" });
+  $("sbRun").addEventListener("click",function(){ sbSeed+=7; sbJoint=$("sbJoint").value;
+    views.sandbox.reload(customArm(sbCfg(),sbSeed,sbJoint),sbJoint,"thermal"); views.sandbox.goto(29);
+    var m=views.sandbox.robot.maintenance[sbJoint].thermal,called=firstFlag(m.status_by_day),cap=m.cap_cross_day;
+    $("sbNote").innerHTML = called<0 ? "Too slow to flag in 30 days. Try a faster rate or an earlier start."
+      : "<b class='call'>Caught on day "+called+".</b>"+(cap!=null?" It hit the action cap on day "+cap+", a "+(cap-called)+"-day head start." : " It never got bad enough to pull a run, so the trend bought the whole month."); });
 
-  // ---------- SCENE 5: explore the fleet ----------
+  // SCENE 5: explore the fleet
   var exDS=DS, exSeed=SEED, exIdx=2;
-  function summaryFor(id){ var f=SIM.fleet.find(function(x){return x.robot_id===id;});
-    if(f.profile==="healthy") return "no fault planted; both checks stay quiet";
-    if(f.profile==="thermal-creep") return "thermal creep; the daily trend flags it before the gate ever warns";
-    if(f.profile==="effort-rise") return "effort rise; only the current channel sees this, heat stays normal";
-    if(f.profile==="acute-hot-start") return "acute spike; the per-run gate quarantines it on the spot"; return ""; }
-  function landDay(rob,f){ var c=firstFlag(rob.maintenance[f.joint][f.channel].status_by_day); return c>=0?c:29; } // jump to the moment something happens
-  var ex=makeView({robot:exDS.robots[2],joint:faultOf("wx-03").joint,channel:faultOf("wx-03").channel,arm:"exArm",runs:"exRuns",trend:"exTrend",note:"exNote",scrub:"exScrub",play:"exPlay",dayEl:"exDay"});
+  function landDay(rob,f){ var c=firstFlag(rob.maintenance[f.joint][f.channel].status_by_day); return c>=0?c:29; }
+  views.explore=makeView({ id:"explore", robot:exDS.robots[2], joint:faultOf("wx-03").joint, channel:faultOf("wx-03").channel, stage:"exStage", fb:"exArm2d",
+    runs:"exRuns", trend:"exTrend", note:"exNote", scrub:"exScrub", play:"exPlay", hudDay:"exDayHud" });
   (function(){ var box=$("fleet"); SIM.fleet.forEach(function(a,i){ box.insertAdjacentHTML("beforeend",
-      "<div class='arm-mini"+(i===2?" sel":"")+"' data-i='"+i+"'><div class='id'>"+a.robot_id+"</div><div class='pf'>"+a.profile.replace(/-/g," ")+"</div></div>"); });
+      "<div class='arm-mini"+(i===2?" sel":"")+"' data-i='"+i+"'><div class='id'>"+armName(a.robot_id)+"</div><div class='pf'>"+profileLabel(a.profile)+"</div></div>"); });
     function loadArm(i,doScroll){ exIdx=i; Array.prototype.forEach.call(box.children,function(c){ c.className="arm-mini"+(+c.getAttribute("data-i")===i?" sel":""); });
       var a=SIM.fleet[i],f=faultOf(a.robot_id),rob=exDS.robots[i];
-      $("exLabel").innerHTML=a.robot_id+" <span class='muted'>&middot; "+summaryFor(a.robot_id)+"</span>";
-      ex.reload(rob,f.joint,f.channel); ex.stop(); ex.goto(landDay(rob,f)); if(doScroll)$("exArm").scrollIntoView({behavior:"smooth",block:"nearest"}); }
+      $("exLabel").innerHTML=armName(a.robot_id);
+      views.explore.reload(rob,f.joint,f.channel); views.explore.goto(landDay(rob,f));
+      $("exNote").innerHTML=summaryFor(a.robot_id)+". "+$("exNote").innerHTML;
+      if(doScroll)$("exStage").scrollIntoView({behavior:"smooth",block:"nearest"}); }
     Array.prototype.forEach.call(box.children,function(c){ c.addEventListener("click",function(){ loadArm(+c.getAttribute("data-i"),true); }); });
     loadArm(2,false);
     $("exReroll").addEventListener("click",function(){ exSeed=(SEED+1+Math.floor((window.performance?performance.now():1)*1000))>>>0; exDS=E.buildDataset(exSeed); loadArm(exIdx,false); });
   })();
 
-  // ---------- play scenes only when visible ----------
-  var views={hero:window.__heroApi,film:film,sandbox:sb,explore:ex};
+  // ---- coordinator: play the on-screen scene, and move the shared 3D arm to the most-visible one ----
+  var ARM_SCENES=["hero","film","sandbox","explore"], ratios={};
+  function updateArm(){ if(!ARM)return; var best=null,br=0.001; ARM_SCENES.forEach(function(idv){ if((ratios[idv]||0)>br){ br=ratios[idv]; best=idv; } });
+    if(best){ if(ARM.current!==best) views[best].attach(); } else { ARM.stop(); ARM.current=null; } }
   if("IntersectionObserver" in window){
-    var io=new IntersectionObserver(function(es){ es.forEach(function(e){ var v=views[e.target.id]; if(!v)return; if(e.isIntersecting)v.start(); else v.stop(); }); },{threshold:0.2});
-    ["hero","film","sandbox","explore"].forEach(function(id){ io.observe($(id)); });
-  } else { film.start(); }
+    var io=new IntersectionObserver(function(es){ es.forEach(function(e){ ratios[e.target.id]=e.isIntersecting?e.intersectionRatio:0;
+      var v=views[e.target.id]; if(v){ if(e.isIntersecting) v.play(); else v.pause(); } }); updateArm(); }, {threshold:[0,0.2,0.5,0.85]});
+    ARM_SCENES.forEach(function(idv){ io.observe($(idv)); });
+  } else { ARM_SCENES.forEach(function(idv){ views[idv].play(); }); }
+  if(ARM){ views.hero.attach(); }   // show the arm immediately, before the observer first fires
 })();
 </script>
 </body>
