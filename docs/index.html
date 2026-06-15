@@ -162,11 +162,11 @@
 <section class="scene" id="call">
   <div class="inner" style="max-width:740px;">
     <p class="kicker" id="callKicker">your call</p>
-    <h2>The elbow is overheating. The quick check still says fine.</h2>
-    <p class="lead">A hot motor cannot hit the torque it is commanded, so the arm's recorded motion drifts and the AI trains on corrupted data. Collect this run, or pull the arm?</p>
+    <h2>The elbow is heating up, and the trend just called maintenance. Stop collecting?</h2>
+    <p class="lead">The fast gate still says PASS: this run's data is good, the motor is hitting its torques. The trend caught the climb early, about a week before the data is at risk. Pull the arm now, or keep collecting?</p>
     <div class="row" id="callBtns">
-      <button class="btn" data-c="collect">Collect the run</button>
-      <button class="btn ghost" data-c="pull">Pull the arm</button>
+      <button class="btn" data-c="collect">Keep collecting</button>
+      <button class="btn ghost" data-c="pull">Pull the arm now</button>
     </div>
     <div id="callReveal" style="display:none;margin-top:22px;">
       <div class="split">
@@ -569,9 +569,12 @@
   var callDone=false;
   Array.prototype.forEach.call(document.querySelectorAll("#callBtns .btn"),function(b){
     b.addEventListener("click",function(){ if(callDone)return; callDone=true; var choice=b.getAttribute("data-c");
-      $("callGate").innerHTML="<span class='verdictbig v PASS'>PASS</span><p class='tnote'>Within every per-run limit, and it stays clear for "+GATELEAD+" more days.</p>";
-      $("callTrend").innerHTML="<span class='verdictbig v WARN'>already flagged</span><p class='tnote'>Called maintenance on <b class='call'>day "+CALLED+"</b>, with "+(CAP-CALLED)+" days of lead before any run fails.</p>";
-      $("callMoney").innerHTML=(choice==="pull"?"Good call. ":"Collecting felt safe, and that is the trap. ")+"You would have banked <span class='hlr'>days of corrupted data</span> before anything warned you. The slow trend already knew. <span class='hl'>Same sensors, two timescales.</span>";
+      $("callGate").innerHTML="<span class='verdictbig v PASS'>PASS</span><p class='tnote'>The motor is hitting its torques, so this run's data is good. The gate stays clean for "+GATELEAD+" more days.</p>";
+      $("callTrend").innerHTML="<span class='verdictbig v WARN'>flagged day "+CALLED+"</span><p class='tnote'>The joint does not reach the data-at-risk line until day "+CAP+", so you have "+(CAP-CALLED)+" days to schedule the swap.</p>";
+      $("callMoney").innerHTML=(choice==="collect"
+        ? "Right call. The gate says the data is good, so collect it. The trend already bought you a week to swap the motor on a planned window: you keep collecting and take <span class='hl'>no surprise outage</span>. "
+        : "Premature. The gate says this run's data is still good, so pulling now throws away clean runs and takes the arm down sooner than you need to. ")
+        +"The fast gate guards each run's data; the slow trend guards your uptime. <span class='hl'>Same sensors, two jobs.</span>";
       $("callReveal").style.display="block"; $("callBtns").style.opacity=".5"; $("callReveal").scrollIntoView({behavior:"smooth",block:"nearest"}); });
   });
 
