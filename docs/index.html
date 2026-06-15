@@ -3,443 +3,660 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>robot-vitals</title>
+<title>robot-vitals &middot; a health check for the robots that train AI</title>
+<meta name="description" content="A health check for the robots that train AI policies. It catches when the robot, not the AI, is quietly corrupting the data, and it only tests the faults that actually do that.">
 <style>
-  :root {
-    --bg:#f7f8fa; --panel:#fff; --ink:#1c2127; --muted:#5b6470; --line:#e3e6ea;
-    --accent:#2f6df0; --accentsoft:#2f6df015;
-    --pass:#1f9d57; --warn:#c98300; --quar:#d23f3f;
-    --stable:#1f9d57; --drift:#c98300; --alarm:#d23f3f; --grid:#eef0f3;
+  :root{
+    --bg:#0b0e13; --bg2:#0e1219; --panel:#141a24; --panel2:#10151d; --ink:#eaeef4; --muted:#8a94a4;
+    --line:#222a36; --accent:#5a8bff; --pass:#2fb36a; --warn:#e6a72e; --quar:#e85d5d; --cool:#39b0ff;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg:#0f1216; --panel:#161a20; --ink:#e6e9ee; --muted:#9aa4b1; --line:#262c34;
-      --accent:#5a8bff; --accentsoft:#5a8bff1c;
-      --pass:#3fb277; --warn:#e0a32e; --quar:#e85d5d;
-      --stable:#3fb277; --drift:#e0a32e; --alarm:#e85d5d; --grid:#1d232b;
-    }
-  }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink); -webkit-font-smoothing:antialiased;
-    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
-  .wrap { max-width:1000px; margin:0 auto; padding:38px 22px 90px; }
-  h1 { font-size:26px; margin:0 0 4px; letter-spacing:-.01em; }
-  .tag { color:var(--muted); margin:0; }
-  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:0 0 4px; }
-  section { margin-top:38px; }
-  .lead { margin:0 0 16px; max-width:74ch; }
-  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px 20px; }
-  .synthetic { margin-top:14px; font-size:12.5px; color:var(--muted); border:1px solid var(--line);
-    border-radius:8px; padding:8px 12px; display:inline-block; }
-  .muted { color:var(--muted); }
-  .badge { font-size:10.5px; font-weight:600; padding:2px 8px; border-radius:20px; white-space:nowrap; }
-  .b-PASS,.b-stable { color:var(--stable); background:color-mix(in srgb,var(--stable) 15%,transparent); }
-  .b-WARN,.b-drifting { color:var(--drift); background:color-mix(in srgb,var(--drift) 18%,transparent); }
-  .b-QUARANTINE,.b-alarm { color:var(--alarm); background:color-mix(in srgb,var(--alarm) 18%,transparent); }
-  a { color:var(--accent); }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+  .scene{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:48px 20px;border-bottom:1px solid var(--line);position:relative;}
+  .inner{max-width:1000px;margin:0 auto;width:100%;}
+  .kicker{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--accent);font-weight:700;margin:0 0 10px;}
+  h1{font-size:clamp(28px,5vw,46px);line-height:1.08;margin:0 0 14px;letter-spacing:-.02em;}
+  h2{font-size:clamp(22px,3.4vw,32px);margin:0 0 12px;letter-spacing:-.01em;}
+  .lead{font-size:clamp(16px,2vw,19px);color:#c7cedb;max-width:62ch;margin:0 0 18px;}
+  .muted{color:var(--muted);}
+  .btn{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#fff;border:none;border-radius:11px;
+    padding:12px 22px;font:inherit;font-weight:700;cursor:pointer;text-decoration:none;}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);font-weight:500;}
+  .btn:disabled{opacity:.4;cursor:default;}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
+  .skip{position:fixed;top:16px;right:18px;z-index:30;font-size:12.5px;color:var(--muted);background:#0e1219cc;border:1px solid var(--line);
+    border-radius:20px;padding:7px 14px;text-decoration:none;backdrop-filter:blur(6px);}
+  .skip:hover{color:var(--ink);}
+  .scrollcue{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);color:var(--muted);font-size:12px;animation:bob 1.8s ease-in-out infinite;}
+  @keyframes bob{0%,100%{transform:translate(-50%,0);}50%{transform:translate(-50%,7px);}}
 
-  /* how-it-works steps */
-  .steps { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:8px; }
-  @media (max-width:760px){ .steps { grid-template-columns:1fr 1fr; } }
-  .step { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; font-size:13px; }
-  .step .n { display:inline-block; width:20px; height:20px; border-radius:50%; background:var(--accent); color:#fff;
-    font-size:12px; font-weight:700; text-align:center; line-height:20px; margin-bottom:6px; }
-  .worked { margin-top:14px; display:grid; grid-template-columns:1.4fr 1fr; gap:16px; }
-  @media (max-width:760px){ .worked { grid-template-columns:1fr; } }
-  table.joints { width:100%; border-collapse:collapse; font-size:13px; }
-  table.joints th,table.joints td { text-align:left; padding:4px 8px; }
-  table.joints th { color:var(--muted); font-weight:500; font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
-  table.joints tr+tr td { border-top:1px solid var(--line); }
-  table.joints td.num { text-align:right; font-variant-numeric:tabular-nums; }
-  tr.weak td { background:color-mix(in srgb,var(--alarm) 10%,transparent); font-weight:600; }
-  pre.stamp { background:var(--grid); border:1px solid var(--line); border-radius:10px; padding:12px 14px;
-    font-size:11.5px; line-height:1.5; overflow:auto; margin:0; }
+  /* arm + panels */
+  .armwrap{background:radial-gradient(600px 360px at 50% 30%,#171d28,var(--panel2));border:1px solid var(--line);border-radius:18px;padding:8px;position:relative;}
+  svg{display:block;width:100%;height:auto;}
+  .joint{transition:fill .5s ease, filter .5s ease;cursor:pointer;}
+  .seg{stroke:#9fb0c6;stroke-linecap:round;fill:none;} .seg2{stroke:#5b6b82;stroke-linecap:round;fill:none;}
+  .legend{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--muted);padding:4px 10px 8px;}
+  .legend .bar{height:8px;width:130px;border-radius:6px;background:linear-gradient(90deg,#39b0ff,#2fb36a,#e6a72e,#e85d5d);}
+  .stage{display:grid;grid-template-columns:1.15fr 1fr;gap:16px;align-items:start;}
+  @media(max-width:820px){.stage{grid-template-columns:1fr;}}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:14px;padding:14px 16px;}
+  .card h3{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0 0 8px;font-weight:600;}
+  .runs{display:flex;flex-direction:column;gap:6px;}
+  .run{display:flex;align-items:center;justify-content:space-between;font-size:13px;padding:6px 10px;border-radius:9px;background:#0e131a;border:1px solid var(--line);}
+  .v{font-weight:700;font-size:11px;padding:2px 8px;border-radius:20px;}
+  .v.PASS{color:var(--pass);background:#2fb36a22;} .v.WARN{color:var(--warn);background:#e6a72e22;} .v.QUARANTINE{color:var(--quar);background:#e85d5d22;}
+  .run .t{color:var(--muted);font-variant-numeric:tabular-nums;}
+  .tnote{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5;}
+  .tnote b.call{color:var(--accent);} .tnote b.cap{color:var(--quar);}
+  .controls{margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:11px 15px;}
+  input[type=range]{flex:1;min-width:150px;accent-color:var(--accent);}
+  select{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font:inherit;}
+  .daychip{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);}
+  .daychip b{color:var(--ink);}
 
-  /* controls + arm tabs */
-  .controls { display:flex; flex-wrap:wrap; gap:9px; align-items:center; margin:8px 0 4px; }
-  .controls button,.tab { font:inherit; font-size:13px; padding:6px 12px; border-radius:8px;
-    border:1px solid var(--line); background:var(--panel); color:var(--ink); cursor:pointer; }
-  .controls button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
-  .controls input { font:inherit; font-size:13px; width:110px; padding:6px 8px; border-radius:8px;
-    border:1px solid var(--line); background:var(--bg); color:var(--ink); }
-  .runlabel { font-size:12.5px; color:var(--muted); }
-  .tabs { display:flex; flex-wrap:wrap; gap:7px; margin:6px 0 2px; }
-  .tab { display:flex; align-items:center; gap:7px; font-variant-numeric:tabular-nums; }
-  .tab.sel { border-color:var(--accent); background:var(--accentsoft); }
-  .tab .sdot { width:8px; height:8px; border-radius:50%; }
+  /* 3D stage (film centerpiece) */
+  .arm3dwrap{padding:0;overflow:hidden;}
+  .arm3dstage{position:relative;border-radius:17px;overflow:hidden;background:radial-gradient(700px 440px at 50% 22%,#1a2230,#0c1016);height:430px;cursor:grab;}
+  .arm3dstage:active{cursor:grabbing;}
+  #filmCanvas{display:block;width:100%;height:100%;}
+  .hud3d{position:absolute;left:14px;top:11px;font-size:12px;color:var(--muted);} .hud3d b{color:var(--ink);}
+  .legend3d{position:absolute;right:14px;top:11px;display:flex;gap:7px;align-items:center;font-size:11px;color:var(--muted);}
+  .legend3d .bar{height:8px;width:110px;border-radius:6px;background:linear-gradient(90deg,#39b0ff,#2fb36a,#e6a72e,#e85d5d);}
+  .task3d{position:absolute;left:14px;bottom:11px;font-size:11.5px;color:var(--muted);}
+  .reset3d{position:absolute;right:14px;bottom:11px;font-size:11.5px;color:var(--muted);cursor:pointer;border:1px solid var(--line);border-radius:14px;padding:3px 10px;background:#0a0d12aa;}
+  .reset3d:hover{color:var(--ink);}
+  .fallback3d{position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:30px;font-size:13px;}
 
-  /* gate grid */
-  .gate-wrap { overflow-x:auto; }
-  .gate-grid { display:inline-grid; grid-auto-flow:column; gap:3px; margin-top:6px; }
-  .gcol { display:grid; grid-template-rows:repeat(4,1fr); gap:3px; }
-  .gcell { width:17px; height:15px; border-radius:3px; cursor:pointer; }
-  .gcell.PASS { background:var(--pass); opacity:.30; }
-  .gcell.WARN { background:var(--warn); }
-  .gcell.QUARANTINE { background:var(--quar); }
-  .gcell:hover { outline:2px solid var(--accent); outline-offset:1px; }
-  .xaxis { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin:6px 0 0; max-width:620px; }
-  .legend { display:flex; gap:16px; font-size:12px; color:var(--muted); margin:12px 0 0; flex-wrap:wrap; }
-  .legend i { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:middle; }
+  /* hero */
+  #hero{background:radial-gradient(900px 600px at 50% 0%,#161d2b,var(--bg));text-align:center;}
+  #hero .inner{max-width:760px;}
+  .heroarm{max-width:380px;margin:6px auto 4px;}
+  .twolines{max-width:440px;margin:0 auto;}
+  .blame{font-weight:800;font-size:clamp(20px,3vw,26px);margin:10px 0 2px;min-height:1.3em;}
+  .src{font-size:12px;color:var(--muted);margin-top:14px;}
+  .src a{color:var(--accent);}
 
-  /* joint maintenance cards */
-  .jcards { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:6px; }
-  @media (max-width:760px){ .jcards { grid-template-columns:1fr; } }
-  .jcard { background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:12px 14px; }
-  .jcard.flag { border-color:color-mix(in srgb,var(--alarm) 45%,var(--line)); }
-  .jhead { display:flex; align-items:center; justify-content:space-between; }
-  .jname { font-weight:600; }
-  .jmodel { font-size:11px; color:var(--muted); }
-  .chan { margin-top:9px; }
-  .chan .ct { display:flex; justify-content:space-between; align-items:center; font-size:12px; }
-  .chan .cl { color:var(--muted); }
-  .cap { font-size:11px; color:var(--muted); margin-top:1px; }
-  svg { display:block; width:100%; height:auto; }
+  /* aha freeze */
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media(max-width:680px){.split{grid-template-columns:1fr;}}
+  .verdictbig{font-size:13px;font-weight:700;padding:4px 12px;border-radius:20px;display:inline-block;}
+  .moneyline{font-size:clamp(18px,2.6vw,24px);font-weight:700;margin:16px 0 0;line-height:1.3;}
+  .lead .hl{color:var(--accent);} .lead .hlr{color:var(--quar);}
 
-  .payoff { background:var(--accentsoft); border:1px solid color-mix(in srgb,var(--accent) 38%,var(--line));
-    border-radius:12px; padding:18px 20px; }
-  .payoff strong { color:var(--accent); }
-  footer { margin-top:44px; font-size:12.5px; color:var(--muted); border-top:1px solid var(--line); padding-top:16px; }
+  /* audit */
+  .faults{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-top:8px;}
+  .fault{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:11px 13px;font-size:13px;transition:opacity .5s,filter .5s,border-color .5s;}
+  .fault.gone{opacity:.32;filter:grayscale(1);}
+  .fault.keep{border-color:var(--pass);} .fault.cand{border-color:var(--warn);}
+  .fault .fn{font-weight:700;margin-bottom:3px;} .fault .fr{color:var(--muted);font-size:12px;}
+  .tag{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:14px;}
+  .tag.keep{color:var(--pass);background:#2fb36a22;} .tag.cand{color:var(--warn);background:#e6a72e22;} .tag.cut{color:var(--muted);background:#ffffff10;}
+  .fault.sec{border-color:var(--accent);} .tag.sec{color:var(--accent);background:#5a8bff22;}
 
-  /* tooltip + detail overlay */
-  #tip { position:fixed; pointer-events:none; z-index:30; background:var(--ink); color:var(--bg);
-    font-size:11.5px; line-height:1.5; padding:7px 10px; border-radius:7px; opacity:0; transition:opacity .08s;
-    transform:translate(-50%,calc(-100% - 10px)); max-width:280px; }
-  #overlay { position:fixed; inset:0; z-index:40; background:rgba(0,0,0,.45); display:none; padding:30px 16px; overflow:auto; }
-  #overlay.show { display:block; }
-  .sheet { max-width:760px; margin:0 auto; background:var(--bg); border:1px solid var(--line); border-radius:14px;
-    padding:22px 24px; }
-  .sheet .x { float:right; cursor:pointer; border:1px solid var(--line); background:var(--panel); color:var(--ink);
-    border-radius:8px; padding:4px 10px; font:inherit; font-size:13px; }
-  .bar { position:relative; height:16px; background:var(--grid); border-radius:4px; overflow:hidden; }
-  .bar .fill { position:absolute; left:0; top:0; bottom:0; border-radius:4px; }
-  .bar .lim { position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--alarm); }
+  /* sandbox */
+  .sandctl{display:flex;gap:16px;flex-wrap:wrap;align-items:end;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:14px 16px;margin-bottom:14px;}
+  .field{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted);}
+  .field b{color:var(--ink);font-weight:600;}
+
+  /* fleet */
+  .fleet{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:8px;}
+  .arm-mini{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;cursor:pointer;text-align:center;transition:border-color .2s;}
+  .arm-mini:hover,.arm-mini.sel{border-color:var(--accent);}
+  .arm-mini .id{font-weight:700;font-variant-numeric:tabular-nums;} .arm-mini .pf{font-size:11px;color:var(--muted);}
+
+  /* about + footer */
+  .about{max-width:760px;margin:0 auto;}
+  .about p{color:#c7cedb;}
+  footer{padding:40px 20px;text-align:center;color:var(--muted);font-size:13px;}
+  footer a{color:var(--accent);}
+  #tip{position:fixed;pointer-events:none;z-index:40;background:#0a0d12;border:1px solid var(--line);color:var(--ink);
+    font-size:12px;line-height:1.45;padding:8px 10px;border-radius:9px;opacity:0;transition:opacity .1s;transform:translate(-50%,-118%);white-space:nowrap;}
+  @media (prefers-reduced-motion: reduce){ .scrollcue{animation:none;} }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1>robot-vitals</h1>
-    <p class="tag">A pre-flight data-integrity and predictive-maintenance layer for robot-learning fleets.</p>
-    <div class="synthetic" id="synthetic"></div>
-  </header>
+<a class="skip" href="#explore">Skip to the live demo &rarr;</a>
 
-  <section id="how">
-    <h2>How the pre-flight check works</h2>
-    <p class="lead">Before <em>every</em> test run, the gate reads all seven joints and turns them into the
-    metadata that is stamped onto every episode the run records. Here is that calculation on the worst run
-    in this dataset. Click any run further down to see the same breakdown for it.</p>
-    <div class="steps" id="steps"></div>
-    <div class="worked panel" id="worked"></div>
-  </section>
-
-  <section id="fleet">
-    <h2>Pick an arm</h2>
-    <div class="controls">
-      <button id="btn-new" class="primary">New simulation</button>
-      <span class="muted">seed</span>
-      <input id="seed" type="number" min="0" step="1" placeholder="random">
-      <button id="btn-run">Run</button>
-      <button id="btn-reset">Reset to reference</button>
-      <span class="runlabel" id="runlabel"></span>
+<!-- SCENE 0: HERO -->
+<section class="scene" id="hero">
+  <div class="inner">
+    <p class="kicker">robot-vitals</p>
+    <h1>The robot got sick. The AI took the blame.</h1>
+    <div class="armwrap heroarm"><svg id="heroArm" viewBox="0 0 340 300"></svg></div>
+    <div class="twolines"><svg id="heroLines" viewBox="0 0 440 120"></svg></div>
+    <div class="blame" id="blame"></div>
+    <p class="lead muted" style="margin:8px auto 18px;">A motor slowly overheats over a long shift. The data the robot records is quietly corrupted. The eval score drops, and the policy takes the fall for a hardware fault. This is documented, and nobody was watching for it. I built the part that watches.</p>
+    <div class="row" style="justify-content:center;">
+      <a class="btn" href="#film">See how to catch it &darr;</a>
+      <a class="btn ghost" href="#explore">Skip to the live demo</a>
     </div>
-    <div class="tabs" id="tabs"></div>
-  </section>
+    <p class="src">Documented in <a href="https://arxiv.org/abs/2503.24278" target="_blank" rel="noopener">AutoEval (arXiv:2503.24278)</a>: eval scores regressed after about 8 hours, attributed to motor overheating, not the policy. The illustrative success line above stands in for that finding.</p>
+  </div>
+  <div class="scrollcue">scroll</div>
+</section>
 
-  <section id="gate">
-    <h2 id="gate-h">Per-run gate</h2>
-    <p class="lead">Every cell is one test run (four per day, columns are days). Color is the run's verdict, set
-    by its weakest joint. Hover a run for all seven joint temperatures; click it for the full breakdown. Later
-    runs in a day are warmer, because the arm heats up under continued operation.</p>
-    <div class="panel">
-      <div class="gate-wrap"><div class="gate-grid" id="gate-grid"></div></div>
-      <div class="xaxis"><span id="ax0"></span><span id="ax1"></span></div>
-      <div class="legend">
-        <span><i style="background:var(--pass);opacity:.5"></i>PASS</span>
-        <span><i style="background:var(--warn)"></i>WARN</span>
-        <span><i style="background:var(--quar)"></i>QUARANTINE</span>
+<!-- SCENE 1: PRESS PLAY FILM (3D arm) -->
+<section class="scene" id="film">
+  <div class="inner">
+    <p class="kicker">one arm, 30 days</p>
+    <h2>The robot is the instrument that grades the AI. Nobody checks the instrument.</h2>
+    <p class="lead">Here is arm wx-03 recording its own slow overheating. Press play or scrub the timeline. Two checks read the same sensors the robot already has: a fast gate before every run, and a patient daily trend. Watch which one notices first.</p>
+    <div class="stage">
+      <div class="armwrap arm3dwrap">
+        <div class="arm3dstage" id="filmStage">
+          <canvas id="filmCanvas"></canvas>
+          <svg id="filmArm2d" viewBox="0 0 340 300" style="display:none;height:100%;"></svg>
+          <div class="hud3d">Day <b id="film3dDay">0</b>/30 &middot; <span id="film3dDate"></span></div>
+          <div class="legend3d"><span>cool</span><span class="bar"></span><span>at limit</span></div>
+          <div class="task3d">task: stack the blocks &middot; servos glow by temperature</div>
+          <div class="reset3d" id="film3dReset">reset view</div>
+          <div class="fallback3d" id="film3dFallback">3D needs WebGL; showing the flat view instead.</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card"><h3>Pre-flight gate &middot; today's runs</h3><div class="runs" id="filmRuns"></div></div>
+        <div class="card"><h3>Elbow daily trend</h3><svg id="filmTrend" viewBox="0 0 320 120"></svg><div class="tnote" id="filmNote"></div></div>
       </div>
     </div>
-  </section>
+    <div class="controls">
+      <button class="btn" id="filmPlay" style="padding:9px 16px;">Pause</button>
+      <input type="range" id="filmScrub" min="0" max="29" value="0">
+      <span class="daychip">Day <b id="filmDay">0</b>/30 &middot; <span id="filmDate"></span></span>
+      <button class="btn ghost" id="jumpCatch" style="padding:8px 12px;">Jump to the catch</button>
+    </div>
+  </div>
+</section>
 
-  <section id="maint">
-    <h2 id="maint-h">Predictive maintenance, per joint</h2>
-    <p class="lead">End of day, the same registers feed a CUSUM drift detector for each joint, on two channels:
-    thermal (temperature) and effort (reference-motion current). A joint is flagged only when the trend both
-    drifts statistically and degrades meaningfully. Watch a joint climb, see where maintenance was called
-    (drift detected), and where it became too bad to operate (the action cap).</p>
-    <div class="jcards" id="jcards"></div>
-  </section>
+<!-- SCENE 2: MAKE THE CALL -->
+<section class="scene" id="call">
+  <div class="inner" style="max-width:760px;">
+    <p class="kicker" id="callKicker">your call</p>
+    <h2 id="callH">A run is queued. The arm passed its quick check. Collect, or pull?</h2>
+    <p class="lead">The elbow motor has been creeping hotter for two days. The fast gate before this run says go, and nothing visible is wrong. The next data-collection run is ready. Make the call, then see what each check knew.</p>
+    <div class="row" id="callBtns">
+      <button class="btn" data-c="collect">Collect the data</button>
+      <button class="btn ghost" data-c="pull">Pull the robot</button>
+    </div>
+    <div id="callReveal" style="display:none;margin-top:22px;">
+      <div class="split">
+        <div class="card"><h3>The fast pre-flight gate says</h3><div id="callGate"></div></div>
+        <div class="card"><h3>The patient daily trend says</h3><div id="callTrend"></div></div>
+      </div>
+      <p class="moneyline" id="callMoney"></p>
+      <div class="row" style="margin-top:16px;"><a class="btn ghost" href="#audit">So why only watch heat? &darr;</a></div>
+    </div>
+  </div>
+</section>
 
-  <section id="pay">
-    <h2>The payoff</h2>
-    <div class="payoff" id="payoff"></div>
-  </section>
+<!-- SCENE 3: THE AUDIT -->
+<section class="scene" id="audit">
+  <div class="inner">
+    <p class="kicker">the judgment, and the real work</p>
+    <h2>Do not monitor everything. Monitor only what the AI cannot fix itself.</h2>
+    <p class="lead">These robots are closed-loop. They see where the object actually is and adapt, so they shrug off most hardware variation: a tilted camera, a little imprecision. Flagging that is noise. Run every candidate fault through two filters, can the policy compensate, and does it actually recur on this hardware, and watch ten candidates collapse to essentially one proven fault. Knowing what not to build is the work.</p>
+    <div class="row" style="margin-bottom:6px;"><button class="btn" id="runAudit" style="padding:9px 16px;">Run the audit</button>
+      <span class="muted" id="auditStatus" style="font-size:13px;"></span></div>
+    <div class="faults" id="faults"></div>
+    <p class="lead muted" style="margin-top:16px;">Ten candidates in, one proven fault out, plus one labeled candidate. That restraint is the point. The burden of proof is on inclusion, every cut is documented, and the architecture adds the next fault the day the fleet data earns it.</p>
+    <p class="tnote">Three lower-stakes candidates (comms bus, depth calibration, gearbox backlash) were also evaluated and cut; omitted here for brevity.</p>
+  </div>
+</section>
 
-  <footer id="footer"></footer>
-</div>
+<!-- SCENE 4: SANDBOX -->
+<section class="scene" id="sandbox">
+  <div class="inner">
+    <p class="kicker">your turn</p>
+    <h2>Break an arm yourself, then watch the two checks split.</h2>
+    <p class="lead">Pick a joint, how fast it overheats, and what day it starts. Run it. The fast gate keeps passing while the patient trend catches your planted fault, and the tool reports how many days of lead time that buys, without ever inventing a failure date it cannot prove.</p>
+    <div class="sandctl">
+      <label class="field">overheating joint<br><b><select id="sbJoint"></select></b></label>
+      <label class="field" style="min-width:180px;">drift speed<br><input type="range" id="sbRate" min="0" max="12" value="6" step="1"></label>
+      <label class="field">starts on day<br><b><select id="sbOnset"></select></b></label>
+      <button class="btn" id="sbRun" style="padding:10px 18px;">Run it</button>
+    </div>
+    <div class="stage">
+      <div class="armwrap"><svg id="sbArm" viewBox="0 0 340 300"></svg>
+        <div class="legend"><span>cool</span><span class="bar"></span><span>at limit</span></div></div>
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card"><h3>Pre-flight gate &middot; today</h3><div class="runs" id="sbRuns"></div></div>
+        <div class="card"><h3>Daily trend</h3><svg id="sbTrend" viewBox="0 0 320 120"></svg><div class="tnote" id="sbNote"></div></div>
+      </div>
+    </div>
+    <div class="controls"><button class="btn" id="sbPlay" style="padding:9px 16px;">Pause</button>
+      <input type="range" id="sbScrub" min="0" max="29" value="0">
+      <span class="daychip">Day <b id="sbDay">0</b>/30</span></div>
+  </div>
+</section>
 
+<!-- SCENE 5: EXPLORE THE FLEET -->
+<section class="scene" id="explore">
+  <div class="inner">
+    <p class="kicker">the whole fleet</p>
+    <h2>Eight arms, 30 days. Three are breaking, two of them quietly. Find them.</h2>
+    <p class="lead">Click any arm to load its full 30-day story into the view below, the way you just watched wx-03. The data is synthetic so it runs in your browser, but the scoring, the gate, and the drift detection are the real logic.</p>
+    <div class="fleet" id="fleet"></div>
+    <div class="stage" style="margin-top:16px;">
+      <div class="armwrap"><svg id="exArm" viewBox="0 0 340 300"></svg>
+        <div class="legend"><span id="exLabel" style="font-weight:600;color:var(--ink)"></span><span style="margin-left:auto"></span><span class="bar"></span></div></div>
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card"><h3>Pre-flight gate &middot; today</h3><div class="runs" id="exRuns"></div></div>
+        <div class="card"><h3>Fault channel, daily trend</h3><svg id="exTrend" viewBox="0 0 320 120"></svg><div class="tnote" id="exNote"></div></div>
+      </div>
+    </div>
+    <div class="controls"><button class="btn" id="exPlay" style="padding:9px 16px;">Pause</button>
+      <input type="range" id="exScrub" min="0" max="29" value="0">
+      <span class="daychip">Day <b id="exDay">0</b>/30</span>
+      <button class="btn ghost" id="exReroll" style="padding:8px 12px;">New simulation</button></div>
+  </div>
+</section>
+
+<!-- ABOUT -->
+<section class="scene" id="about" style="min-height:auto;">
+  <div class="inner about">
+    <p class="kicker">what this is</p>
+    <h2>The contribution is the judgment, not the feature count.</h2>
+    <p>I designed and built robot-vitals end to end: an audit that decides which hardware faults are even worth testing on a closed-loop robot and collapses the whole parts list to essentially one that matters, plus a per-run health gate, a patient daily trend detector, a tested Python core, and this live simulation.</p>
+    <p>It proves that on a closed-loop robot only one fault, an overheating motor, silently corrupts the data and is worth a dedicated test. Knowing what not to build, and refusing to print a single number I cannot defend, is the work. Every threshold here traces to a servo datasheet or is labeled illustrative, pending fleet validation.</p>
+    <div class="row" style="margin-top:10px;">
+      <a class="btn ghost" href="dashboard.html">Open the engineer's grid view &rarr;</a>
+      <a class="btn ghost" href="https://github.com/Yash-Prakash1/robot-vitals#readme" target="_blank" rel="noopener">Read the full write-up</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  Synthetic fleet, real sensor logic. Built by Yash Prakash.
+  &middot; <a href="https://github.com/Yash-Prakash1/robot-vitals" target="_blank" rel="noopener">code on GitHub</a>
+  &middot; <a href="dashboard.html">grid dashboard</a>
+</footer>
 <div id="tip"></div>
-<div id="overlay"><div class="sheet" id="sheet"></div></div>
 
-<script src="data.js"></script>
 <script src="config.js"></script>
 <script src="engine.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-// Renders window.FLEET_DATA into five sections (mirroring the <section> ids
-// above): how-it-works -> arm picker -> per-run gate grid -> per-joint
-// maintenance -> payoff, plus a click-through run-detail overlay. render() is the
-// entry point (near the bottom); everything above it is a per-section renderer or
-// a small shared helper.
-(function () {
-  var REFERENCE = window.FLEET_DATA;
-  if (!REFERENCE) { document.getElementById("how").innerHTML = "data.js failed to load"; return; }
-  var hasEngine = !!(window.RVEngine && window.RVEngine.buildDataset);
-  var D = REFERENCE, selectedArm = null, tabButtons = [];
-  var tip = document.getElementById("tip");
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id);};
+  var tip=$("tip");
+  var E=window.RVEngine;
+  if(!E){ document.body.insertAdjacentHTML("afterbegin","<p style='padding:30px;color:#e85d5d'>The engine did not load. Open this page over HTTP (the GitHub Pages link), not as a local file.</p>"); return; }
 
-  function el(t,c,h){ var e=document.createElement(t); if(c)e.className=c; if(h!=null)e.innerHTML=h; return e; }
-  function byId(id){ return document.getElementById(id); }
-  function round(x,n){ var f=Math.pow(10,n||0); return Math.round(x*f)/f; }
-  function robot(id){ return D.robots.find(function(r){ return r.robot_id===id; }); }
-  function jointDef(name){ return D.meta.joints.find(function(j){ return j.name===name; }); }
+  // ---- constants + fleet, all from config.json via window.RV_CONFIG (single source of truth) ----
+  var CFG=E.cfg, SIM=CFG.simulator, JN=E.jointNames, LIM=E.jointLimit, B=E.baselineDays, BASE=SIM.base_temp_c, START=E.startDate;
+  var JOINTS=JN.map(function(n){ return {name:n, limit:LIM[n], base:BASE[n]}; });
+  var SEV={PASS:0,WARN:1,QUARANTINE:2};
 
-  // scoring (reads single-sourced thresholds; same formula as src/quality_score.py)
-  function score(temp,limit){ var b=D.meta.thresholds.healthy_band_c, c=limit-b;
-    if(temp<=c)return 100; if(temp>=limit)return 0; return 100*(limit-temp)/b; }
-  function verdict(temp,limit){ var th=D.meta.thresholds;
-    if(temp<=limit-th.warn_offset_c)return "PASS"; if(temp<=limit-th.quarantine_offset_c)return "WARN"; return "QUARANTINE"; }
+  // ---- date + heat color (presentation only) ----
+  function pad2(n){return (n<10?"0":"")+n;}
+  function dstr(day){ var p=START.split("-"); var dt=new Date(Date.UTC(+p[0],+p[1]-1,+p[2])); dt.setUTCDate(dt.getUTCDate()+day); return dt.toISOString().slice(0,10); }
+  function lerp(a,b,t){return a+(b-a)*t;}
+  function hx(c){return "#"+c.map(function(x){return ("0"+Math.round(x).toString(16)).slice(-2);}).join("");}
+  var STOPS=[[0,[232,93,93]],[0.32,[230,167,46]],[0.62,[47,179,106]],[1,[57,176,255]]];
+  function heat(t,limit){ var h=Math.max(0,Math.min(1,(limit-t)/25));
+    for(var i=0;i<STOPS.length-1;i++){ if(h>=STOPS[i][0]&&h<=STOPS[i+1][0]){ var f=(h-STOPS[i][0])/(STOPS[i+1][0]-STOPS[i][0]); var a=STOPS[i][1],b=STOPS[i+1][1]; return hx([lerp(a[0],b[0],f),lerp(a[1],b[1],f),lerp(a[2],b[2],f)]); } } return hx(STOPS[3][1]); }
+  function heatRGB(t,limit){ var s=heat(t,limit); return [parseInt(s.slice(1,3),16)/255,parseInt(s.slice(3,5),16)/255,parseInt(s.slice(5,7),16)/255]; }
 
-  // status / verdict to color (the CSS b-* classes encode the same map)
-  function lineColor(s){ return s==="alarm"?"var(--alarm)":(s==="drifting"?"var(--drift)":"var(--stable)"); }
-  function verdictColor(v){ return v==="QUARANTINE"?"var(--quar)":(v==="WARN"?"var(--warn)":"var(--pass)"); }
-  function armStatus(r){ return r.flags.some(function(f){return f.status==="alarm";})?"alarm":(r.flags.length?"drifting":"stable"); }
+  // ---- data layer: every number comes from RVEngine (the same core the Python ships) ----
+  var SEED=SIM.canonical_seed;
+  var DS=E.buildDataset(SEED);
+  function robotById(ds,id){ return ds.robots.find(function(r){return r.robot_id===id;}); }
+  function faultOf(id){ var f=SIM.fleet.find(function(x){return x.robot_id===id;})||{profile:"healthy"};
+    if(f.profile==="effort-rise") return {channel:"effort", joint:f.effort_joint};
+    if(f.profile==="thermal-creep") return {channel:"thermal", joint:f.creep_joint};
+    if(f.profile==="acute-hot-start") return {channel:"thermal", joint:f.acute_joint};
+    return {channel:"thermal", joint:"elbow"}; }
+  function tempsAt(rob,day){ var o={}; JN.forEach(function(j){ o[j]=rob.maintenance[j].thermal.raw[day]; }); return o; }
+  function firstFlag(sb){ if(!sb)return -1; for(var i=0;i<sb.length;i++) if(sb[i]&&sb[i]!=="stable") return i; return -1; }
+  function dayWorst(rob,day){ var w="PASS"; rob.runs.filter(function(r){return r.day===day;}).forEach(function(r){ if(SEV[r.verdict]>SEV[w])w=r.verdict; }); return w; }
+  function firstGateWarn(rob){ for(var d=0;d<30;d++) if(dayWorst(rob,d)!=="PASS") return d; return -1; }
 
-  // one table row per joint, shared by the how-it-works table and the detail
-  // table (the only difference is the detail view's temp-vs-limit bar cell).
-  function jointRow(j,run,withBar){
-    var t=run.temps_c[j.name], sc=score(t,j.limit_c), vd=verdict(t,j.limit_c), weak=(j.name===run.weakest_joint);
-    var bar=withBar?"<td style='width:200px'><div class='bar'><div class='fill' style='width:"
-      +(Math.max(0,Math.min(1,(t-30)/(j.limit_c-30)))*100).toFixed(0)+"%;background:"+verdictColor(vd)
-      +";opacity:"+(vd==='PASS'?.45:.85)+"'></div><div class='lim' style='left:100%'></div></div></td>":"";
-    return "<tr class='"+(weak?"weak":"")+"'><td>"+j.name+(weak&&!withBar?" &larr; weakest":"")
-      +"</td><td class='muted'>"+j.model.split("-")[0]+"</td>"+bar+"<td class='num'>"+t.toFixed(1)
-      +"</td><td class='num'>"+j.limit_c+"</td><td class='num'>"+sc.toFixed(0)+"</td><td><span class='badge b-"+vd+"'>"+vd+"</span></td></tr>";
-  }
-  // the per-joint metadata stamped onto every episode of a run (mirrors RunReport.to_stamp)
-  function jointScores(run){
-    return Object.fromEntries(D.meta.joints.map(function(j){ var t=run.temps_c[j.name];
-      return [j.name,{temp_c:t,limit_c:j.limit_c,score:round(score(t,j.limit_c),1),verdict:verdict(t,j.limit_c)}]; }));
-  }
-
-  // ---------- generic line chart ----------
-  function lineChart(values, opts) {
-    var W=opts.width||320, H=opts.height||96, padL=34, padR=8, padT=8, padB=16;
-    var n=values.length, plotW=W-padL-padR, plotH=H-padT-padB;
-    var lo=opts.yMin, hi=opts.yMax, span=(hi-lo)||1;
-    var X=function(d){ return padL+(n<=1?0:d/(n-1)*plotW); };
-    var Y=function(v){ return padT+(1-(Math.max(lo,Math.min(hi,v))-lo)/span)*plotH; };
-    var p=["<svg viewBox='0 0 "+W+" "+H+"' role='img'>"];
-    // y axis labels (lo, hi)
-    p.push("<text x='2' y='"+(padT+4)+"' font-size='9' fill='var(--muted)'>"+round(hi,opts.yround||0)+"</text>");
-    p.push("<text x='2' y='"+(H-padB+3)+"' font-size='9' fill='var(--muted)'>"+round(lo,opts.yround||0)+"</text>");
-    (opts.lines||[]).forEach(function(L){
-      if(L.y<lo||L.y>hi)return; var y=Y(L.y).toFixed(1);
-      p.push("<line x1='"+padL+"' y1='"+y+"' x2='"+(W-padR)+"' y2='"+y+"' stroke='"+L.color+"' stroke-width='1' "+(L.dashed?"stroke-dasharray='4 3' ":"")+"opacity='"+(L.op||0.7)+"'/>");
-      if(L.label)p.push("<text x='"+(W-padR)+"' y='"+(y-2)+"' text-anchor='end' font-size='8.5' fill='"+L.color+"'>"+L.label+"</text>");
-    });
-    (opts.markers||[]).forEach(function(m){
-      if(m.x==null)return; var x=X(m.x).toFixed(1);
-      p.push("<line x1='"+x+"' y1='"+padT+"' x2='"+x+"' y2='"+(H-padB)+"' stroke='"+m.color+"' stroke-width='1' opacity='.55'/>");
-      p.push("<text x='"+x+"' y='"+(H-4)+"' text-anchor='middle' font-size='8.5' fill='"+m.color+"'>"+m.label+"</text>");
-    });
-    var pts=values.map(function(v,d){ return X(d)+","+Y(v).toFixed(1); }).join(" ");
-    p.push("<polyline fill='none' stroke='"+(opts.color||"var(--accent)")+"' stroke-width='1.8' points='"+pts+"'/>");
-    p.push("<circle cx='"+X(n-1).toFixed(1)+"' cy='"+Y(values[n-1]).toFixed(1)+"' r='2.4' fill='"+(opts.color||"var(--accent)")+"'/>");
-    p.push("</svg>"); return p.join("");
-  }
-  // the two markers every maintenance chart shares: where maintenance was called
-  // (drift detected) and where it became too bad to operate (cap crossed).
-  function driftMarkers(ch){ return [ {x:ch.cusum_detected_day,color:"var(--accent)",label:"called"},
-    {x:ch.cap_cross_day,color:"var(--alarm)",label:"pull"} ]; }
-  function thermalLines(limit){ return [ {y:limit,color:"var(--alarm)",label:"limit "+limit},
-    {y:limit-D.meta.thresholds.warn_offset_c,color:"var(--warn)",dashed:true,label:"warn"} ]; }
-
-  // ---------- how it works ----------
-  function worstRun() {
-    var best=null;
-    D.robots.forEach(function(r){ r.runs.forEach(function(run){ if(!best||run.gate_score<best.gate_score)best={run:run,rid:r.robot_id}; }); });
-    return best;
-  }
-  function renderHow() {
-    var steps=[
-      ["Read","Read every joint's Present Temperature over the serial bus. No added sensors."],
-      ["Score","Score each joint's headroom to its own datasheet limit (80 C XM430, 72 C XL430)."],
-      ["Weakest link","The run's gate score and verdict come from the weakest joint. One hot joint corrupts the run."],
-      ["Stamp","Attach the score, verdict, and per-joint breakdown to every episode the run records."],
-    ];
-    var s=byId("steps"); s.innerHTML="";
-    steps.forEach(function(st,i){ var d=el("div","step"); d.innerHTML="<span class='n'>"+(i+1)+"</span><div><strong>"+st[0]+"</strong><br><span class='muted'>"+st[1]+"</span></div>"; s.appendChild(d); });
-
-    var w=worstRun(); var run=w.run;
-    var rows=D.meta.joints.map(function(j){ return jointRow(j,run,false); }).join("");
-    var stamp={ robot_id:w.rid, run_id:run.run_id, timestamp:run.timestamp,
-      quality_score:run.gate_score, verdict:run.verdict, weakest_joint:run.weakest_joint };
-    byId("worked").innerHTML =
-      "<div><div class='muted' style='font-size:12px;margin-bottom:6px'>Run "+run.run_id+" at "+run.timestamp+"</div>"
-      +"<table class='joints'><tr><th>Joint</th><th>Servo</th><th>Temp C</th><th>Limit</th><th>Score</th><th>Verdict</th></tr>"+rows+"</table></div>"
-      +"<div><div class='muted' style='font-size:12px;margin-bottom:6px'>Metadata stamped onto the episode</div>"
-      +"<pre class='stamp'>"+JSON.stringify(stamp,null,2)+"</pre></div>";
+  // sandbox: a one-off arm with an arbitrary fault, wrapped to look like a fleet robot
+  function poolSigma(arm,keyName){ var g=JN.map(function(j){ return arm[keyName].slice(0,B).map(function(d){return d[j];}); }); return E.pooledSigma(g); }
+  function customArm(cfg,seed,joint){
+    var arm=E.simulateArm(cfg,seed);
+    var runs=arm.runs.map(function(r){ var rep=E.evaluateRun(r.temps,LIM); var tc={}; JN.forEach(function(j){tc[j]=r.temps[j];});
+      return {day:r.day, run_index:r.run_index, temps_c:tc, verdict:rep.verdict, weakest_joint:rep.weakest_joint, gate_score:rep.gate_score}; });
+    var maint={}; JN.forEach(function(j){ maint[j]={thermal:{raw:arm.daily_temp_c.map(function(d){return d[j];})}}; });
+    maint[joint].thermal=E.analyzeThermal(arm.daily_temp_c.map(function(d){return d[joint];}), poolSigma(arm,"daily_temp_c"), LIM[joint]);
+    return {robot_id:"sandbox", profile:"thermal-creep", runs:runs, maintenance:maint};
   }
 
-  // ---------- gate grid for the selected arm ----------
-  function renderGate(r) {
-    byId("gate-h").textContent="Per-run gate · "+r.robot_id;
-    var grid=byId("gate-grid"); grid.innerHTML="";
-    var byDay={};
-    r.runs.forEach(function(run){ (byDay[run.day]=byDay[run.day]||[])[run.run_index]=run; });
-    Object.keys(byDay).map(Number).sort(function(a,b){return a-b;}).forEach(function(day){
-      var col=el("div","gcol");
-      byDay[day].forEach(function(run){
-        var c=el("div","gcell "+run.verdict);
-        c.addEventListener("mousemove",function(ev){ showTip(ev, runTip(r.robot_id,run)); });
-        c.addEventListener("mouseleave",function(){ tip.style.opacity=0; });
-        c.addEventListener("click",function(){ openDetail(r,run); });
-        col.appendChild(c);
-      });
-      grid.appendChild(col);
-    });
-    byId("ax0").textContent=D.meta.start_date; byId("ax1").textContent=D.meta.end_date;
+  // ---- 2D arm (FK + draw) for hero / sandbox / explore / 3D fallback ----
+  var SX=170,SY=240,POST=44,A1=70,A2=64,A3=28;
+  function fk(s,e,w){ var Sp={x:SX,y:SY-POST}; var Ej={x:Sp.x+A1*Math.sin(s),y:Sp.y-A1*Math.cos(s)};
+    var a2=s+e,W={x:Ej.x+A2*Math.sin(a2),y:Ej.y-A2*Math.cos(a2)}; var a3=a2+w,H={x:W.x+A3*Math.sin(a3),y:W.y-A3*Math.cos(a3)};
+    return {Sp:Sp,E:Ej,W:W,H:H,a3:a3}; }
+  var POSES=[[0.5,0.85,0.5,1],[1.0,0.55,0.8,1],[1.0,0.55,0.8,1],[0.65,1.0,0.45,0],[0.18,1.15,0.4,0],[0.18,1.15,0.4,1],[0.5,0.85,0.5,1]];
+  function poseAt(p){ var n=POSES.length-1,x=p*n,i=Math.min(Math.floor(x),n-1),f=x-i;
+    var ease=f<0.5?2*f*f:1-Math.pow(-2*f+2,2)/2; var A=POSES[i],Bp=POSES[i+1];
+    return [lerp(A[0],Bp[0],ease),lerp(A[1],Bp[1],ease),lerp(A[2],Bp[2],ease),lerp(A[3],Bp[3],ease)]; }
+  function armSVG(phase,temps,faultJoint){
+    var ps=poseAt(phase),pos=fk(ps[0],ps[1],ps[2]),grip=ps[3],Sp=pos.Sp,Ej=pos.E,W=pos.W,H=pos.H;
+    var perp={x:Math.cos(pos.a3),y:Math.sin(pos.a3)},spread=3+grip*7;
+    var f1={x:H.x+perp.x*spread+Math.sin(pos.a3)*9,y:H.y+perp.y*spread-Math.cos(pos.a3)*9};
+    var f2={x:H.x-perp.x*spread+Math.sin(pos.a3)*9,y:H.y-perp.y*spread-Math.cos(pos.a3)*9};
+    var nodes={waist:{x:SX,y:SY},shoulder:Sp,elbow:Ej,forearm_roll:{x:lerp(Ej.x,W.x,.5),y:lerp(Ej.y,W.y,.5)},
+      wrist_angle:W,wrist_rotate:{x:lerp(W.x,H.x,.6),y:lerp(W.y,H.y,.6)},gripper:H};
+    var s=["<rect x='"+(SX-28)+"' y='"+(SY+4)+"' width='56' height='14' rx='4' fill='#2a3340'/>",
+      "<line class='seg2' x1='"+SX+"' y1='"+SY+"' x2='"+Sp.x+"' y2='"+Sp.y+"' stroke-width='13'/>",
+      "<line class='seg' x1='"+Sp.x+"' y1='"+Sp.y+"' x2='"+Ej.x+"' y2='"+Ej.y+"' stroke-width='12'/>",
+      "<line class='seg' x1='"+Ej.x+"' y1='"+Ej.y+"' x2='"+W.x+"' y2='"+W.y+"' stroke-width='10'/>",
+      "<line class='seg' x1='"+W.x+"' y1='"+W.y+"' x2='"+H.x+"' y2='"+H.y+"' stroke-width='8'/>",
+      "<line class='seg' x1='"+H.x+"' y1='"+H.y+"' x2='"+f1.x+"' y2='"+f1.y+"' stroke-width='4'/>",
+      "<line class='seg' x1='"+H.x+"' y1='"+H.y+"' x2='"+f2.x+"' y2='"+f2.y+"' stroke-width='4'/>"];
+    JOINTS.forEach(function(j){ var p=nodes[j.name],t=temps[j.name],col=heat(t,j.limit),hot=(j.limit-t)<10;
+      s.push("<circle class='joint' data-name='"+j.name+"' data-t='"+t.toFixed(1)+"' data-lim='"+j.limit+"' cx='"+p.x.toFixed(1)+"' cy='"+p.y.toFixed(1)+"' r='"+(j.name===faultJoint?8.5:6.5)+"' fill='"+col+"' stroke='#0b0e13' stroke-width='1.5' style='filter:drop-shadow(0 0 "+(hot?10:3)+"px "+col+")'/>"); });
+    return s.join("");
   }
-  function runTip(rid,run){
-    var js=D.meta.joints.map(function(j){
-      var t=run.temps_c[j.name], weak=(j.name===run.weakest_joint);
-      return "<span style='color:"+(weak?"#fff":"inherit")+(weak?";font-weight:700":"")+"'>"+j.name+" "+t.toFixed(1)+"</span>";
-    }).join(" &middot; ");
-    return "<strong>"+rid+"  "+run.timestamp.replace("T"," ")+"  run "+run.run_index+"</strong><br>"
-      +"verdict <strong>"+run.verdict+"</strong>, gate score "+run.gate_score+"<br>"+js+"<br><span style='opacity:.7'>click for detail</span>";
-  }
-  function showTip(ev,html){ tip.innerHTML=html; tip.style.opacity=1; tip.style.left=ev.clientX+"px"; tip.style.top=ev.clientY+"px"; }
+  function bindHover(svg){ Array.prototype.forEach.call(svg.querySelectorAll(".joint"),function(c){
+    c.addEventListener("mousemove",function(ev){ tip.style.opacity=1; tip.style.left=ev.clientX+"px"; tip.style.top=ev.clientY+"px";
+      var t=+c.getAttribute("data-t"),lim=+c.getAttribute("data-lim");
+      tip.innerHTML="<b>"+c.getAttribute("data-name")+"</b> &middot; "+t.toFixed(1)+" C<br><span style='color:#8a94a4'>limit "+lim+" C &middot; headroom "+E.thermalHeadroomScore(t,lim).toFixed(0)+"/100</span>"; });
+    c.addEventListener("mouseleave",function(){ tip.style.opacity=0; }); }); }
 
-  // ---------- maintenance cards for the selected arm ----------
-  function thermalChart(ch,j){
-    var lo=Math.min.apply(null,ch.raw)-1.5, hi=Math.max(j.limit_c+1.5, Math.max.apply(null,ch.raw)+1.5);
-    return lineChart(ch.raw,{ yMin:lo, yMax:hi, color:lineColor(ch.status),
-      lines:thermalLines(j.limit_c), markers:driftMarkers(ch) });
+  // ---- panels ----
+  function runsHTML(rob,day,joint){ var h=""; rob.runs.filter(function(r){return r.day===day;}).forEach(function(r){ var hr=9+r.run_index*2;
+    h+="<div class='run'><span class='t'>"+pad2(hr)+":00</span><span>"+joint+" "+(r.temps_c[joint]).toFixed(1)+" C</span><span class='v "+r.verdict+"'>"+r.verdict+"</span></div>"; }); return h; }
+  function trendSVG(rob,joint,channel,uptoDay){
+    var m=rob.maintenance[joint][channel],series=m.raw,called=firstFlag(m.status_by_day),cap=m.cap_cross_day;
+    var W=320,H=120,pL=30,pR=8,pT=10,pB=18,pw=W-pL-pR,ph=H-pT-pB,lo,hi,unit,dp;
+    if(channel==="thermal"){ lo=BASE[joint]-1; hi=LIM[joint]+2; unit="C"; dp=0; }
+    else { var mn=Math.min.apply(null,series),mx=Math.max.apply(null,series),pdv=(mx-mn)*0.18||0.02; lo=mn-pdv; hi=mx+pdv; unit="A"; dp=2; }
+    var X=function(d){return pL+d/29*pw;}, Y=function(t){return pT+(1-(t-lo)/(hi-lo))*ph;};
+    var pts=[]; for(var d=0;d<=uptoDay;d++) pts.push(X(d).toFixed(1)+","+Y(series[d]).toFixed(1));
+    var s=["<svg viewBox='0 0 "+W+" "+H+"'>",
+      "<text x='2' y='14' font-size='9' fill='#8a94a4'>"+hi.toFixed(dp)+"</text><text x='2' y='"+(H-pB+3)+"' font-size='9' fill='#8a94a4'>"+lo.toFixed(dp)+" "+unit+"</text>"];
+    if(channel==="thermal"){ s.push("<line x1='"+pL+"' y1='"+Y(LIM[joint])+"' x2='"+(W-pR)+"' y2='"+Y(LIM[joint])+"' stroke='#e85d5d' stroke-dasharray='4 3' opacity='.8'/><text x='"+(W-pR)+"' y='"+(Y(LIM[joint])-3)+"' text-anchor='end' font-size='9' fill='#e85d5d'>"+LIM[joint]+" C limit</text>"); }
+    else { s.push("<line x1='"+pL+"' y1='"+Y(m.baseline_mean)+"' x2='"+(W-pR)+"' y2='"+Y(m.baseline_mean)+"' stroke='#8a94a4' stroke-dasharray='4 3' opacity='.6'/><text x='"+(W-pR)+"' y='"+(Y(m.baseline_mean)-3)+"' text-anchor='end' font-size='9' fill='#8a94a4'>baseline current</text>"); }
+    if(called>=0&&uptoDay>=called) s.push("<line x1='"+X(called)+"' y1='"+pT+"' x2='"+X(called)+"' y2='"+(H-pB)+"' stroke='#5a8bff' opacity='.6'/><text x='"+X(called)+"' y='"+(H-6)+"' text-anchor='middle' font-size='8.5' fill='#5a8bff'>called</text>");
+    if(cap!=null&&uptoDay>=cap) s.push("<line x1='"+X(cap)+"' y1='"+pT+"' x2='"+X(cap)+"' y2='"+(H-pB)+"' stroke='#e85d5d' opacity='.5'/><text x='"+X(cap)+"' y='"+(H-6)+"' text-anchor='middle' font-size='8.5' fill='#e85d5d'>cap</text>");
+    s.push("<polyline fill='none' stroke='#39b0ff' stroke-width='2' points='"+pts.join(" ")+"'/>");
+    var lt=series[uptoDay]; s.push("<circle cx='"+X(uptoDay)+"' cy='"+Y(lt)+"' r='3' fill='"+(channel==="thermal"?heat(lt,LIM[joint]):"#39b0ff")+"'/></svg>");
+    return s.join("");
   }
-  function effortChart(ch){
-    var base=ch.baseline_mean, cap=base*(1+D.meta.thresholds.effort_action_cap_pct);
-    var lo=Math.min(base*0.96, Math.min.apply(null,ch.raw))-0.005, hi=Math.max(cap*1.04, Math.max.apply(null,ch.raw))+0.005;
-    return lineChart(ch.raw,{ yMin:lo, yMax:hi, yround:2, color:lineColor(ch.status),
-      lines:[ {y:cap,color:"var(--alarm)",dashed:true,label:"cap +25%"}, {y:base,color:"var(--muted)",label:"baseline",op:.5} ],
-      markers:driftMarkers(ch) });
-  }
-  function capNote(ch){
-    if(ch.status==="stable")return "stable, no sustained drift";
-    var s="maintenance called "+D.meta.dates[ch.cusum_detected_day];
-    if(ch.cap_cross_day!=null)s+=", too bad to operate "+D.meta.dates[ch.cap_cross_day];
-    return s;
-  }
-  function renderMaint(r){
-    byId("maint-h").textContent="Predictive maintenance, per joint · "+r.robot_id;
-    var box=byId("jcards"); box.innerHTML="";
-    D.meta.joints.forEach(function(j){
-      var m=r.maintenance[j.name], flag=(m.thermal.status!=="stable"||m.effort.status!=="stable");
-      var card=el("div","jcard"+(flag?" flag":""));
-      card.innerHTML="<div class='jhead'><span class='jname'>"+j.name+"</span><span class='jmodel'>"+j.model+", "+j.limit_c+" C</span></div>";
-      [["Thermal (C)",m.thermal,thermalChart(m.thermal,j)],["Effort (A)",m.effort,effortChart(m.effort)]].forEach(function(row){
-        var c=el("div","chan");
-        c.innerHTML="<div class='ct'><span class='cl'>"+row[0]+"</span><span class='badge b-"+row[1].status+"'>"+row[1].status+"</span></div>"+row[2]+"<div class='cap'>"+capNote(row[1])+"</div>";
-        card.appendChild(c);
-      });
-      box.appendChild(card);
-    });
+  function noteFor(rob,joint,channel,day){
+    var m=rob.maintenance[joint][channel],called=firstFlag(m.status_by_day),cap=m.cap_cross_day;
+    var word=channel==="effort"?"drawing more current":"creeping up";
+    if(called<0) return "The "+joint+" "+(channel==="effort"?"current is steady":"temperature is steady")+". Neither check has anything to flag.";
+    if(day<called) return "The "+joint+" is "+word+". Nothing flagged yet.";
+    if(cap==null||day<cap) return "<b class='call'>Maintenance called day "+called+" ("+dstr(called)+").</b> Still inside safe limits, so there is time to plan the fix.";
+    return "<b class='call'>Called day "+called+".</b> <b class='cap'>Crossed the action cap day "+cap+": book the repair.</b> The quick check never panicked.";
   }
 
-  // ---------- run detail overlay ----------
-  function openDetail(r,run){
-    var rows=D.meta.joints.map(function(j){ return jointRow(j,run,true); }).join("");
-    // weakest joint's daily temperature trend up to this run's day
-    var wj=run.weakest_joint, ch=r.maintenance[wj].thermal, jd=jointDef(wj);
-    var trend=lineChart(ch.raw.slice(0,run.day+1),{ width:680, height:120, color:"var(--accent)",
-      yMin:Math.min.apply(null,ch.raw)-1.5, yMax:jd.limit_c+1.5,
-      lines:thermalLines(jd.limit_c), markers:[{x:run.day,color:"var(--accent)",label:"this run"}] });
-    var js=jointScores(run), vals=Object.keys(js).map(function(k){ return js[k].score; });
-    var stamp={ robot_id:r.robot_id, run_id:run.run_id, timestamp:run.timestamp, quality_score:run.gate_score,
-      verdict:run.verdict, weakest_joint:run.weakest_joint,
-      health_average:round(vals.reduce(function(a,b){return a+b;},0)/vals.length,1), joints:js };
-    byId("sheet").innerHTML =
-      "<button class='x' onclick='document.getElementById(\"overlay\").classList.remove(\"show\")'>close</button>"
-      +"<h2>Test run "+run.run_id+"</h2><p class='muted' style='margin:.2em 0 1em'>"+r.robot_id+" ("+r.profile.replace(/-/g," ")+") &middot; "+run.timestamp.replace("T"," ")+" &middot; verdict <strong class='b-"+run.verdict+"' style='padding:2px 8px;border-radius:20px'>"+run.verdict+"</strong></p>"
-      +"<h2>All seven joints scored against their own limits</h2>"
-      +"<table class='joints' style='margin-bottom:18px'><tr><th>Joint</th><th>Servo</th><th>Temp vs limit</th><th>Temp C</th><th>Limit</th><th>Score</th><th>Verdict</th></tr>"+rows+"</table>"
-      +"<h2>Weakest joint ("+wj+") leading up to this run</h2>"+trend
-      +"<h2 style='margin-top:18px'>Metadata stamped onto every episode of this run</h2><pre class='stamp'>"+JSON.stringify(stamp,null,2)+"</pre>";
-    byId("overlay").classList.add("show");
+  // ---- a reusable scrubbable view (2D arm, 3D arm, thermal or effort channel) ----
+  function makeView(opts){
+    var rob=opts.robot,joint=opts.joint,channel=opts.channel||"thermal";
+    var arm3d=opts.arm3d||null,svgId=opts.arm||null;
+    var runsEl=opts.runs?$(opts.runs):null,trendId=opts.trend,noteEl=opts.note?$(opts.note):null,
+        scrub=opts.scrub?$(opts.scrub):null,playBtn=opts.play?$(opts.play):null,dayEl=opts.dayEl?$(opts.dayEl):null,dateEl=opts.dateEl?$(opts.dateEl):null;
+    var day=0,phase=0,playing=false,acc=0,last=0,raf=null;
+    function renderArm(){ var temps=tempsAt(rob,day);
+      if(arm3d){ arm3d.update(day,dstr(day),temps); }
+      else if(svgId){ var el=$(svgId); el.innerHTML=armSVG(phase,temps,joint); bindHover(el); } }
+    function renderPanels(){ if(dayEl)dayEl.textContent=day; if(dateEl)dateEl.textContent=dstr(day);
+      if(runsEl)runsEl.innerHTML=runsHTML(rob,day,joint);
+      if(trendId){ var t=$(trendId); if(t) t.outerHTML=trendSVG(rob,joint,channel,day).replace("<svg ","<svg id='"+trendId+"' "); }
+      if(noteEl) noteEl.innerHTML=noteFor(rob,joint,channel,day); }
+    function frame(ts){ if(!last)last=ts; var dt=(ts-last)/1000; last=ts;
+      if(playing){ phase=(phase+dt*0.34)%1; if(!arm3d) renderArm();
+        acc+=dt; if(acc>0.85){ acc=0; day=(day+1)%30; if(scrub)scrub.value=day; renderPanels(); if(arm3d) renderArm(); } }
+      raf=requestAnimationFrame(frame); }
+    function setPlaying(p){ playing=p; if(playBtn)playBtn.textContent=p?"Pause":"Play"; last=0; }
+    if(scrub)scrub.addEventListener("input",function(){ day=+this.value; renderPanels(); renderArm(); });
+    if(playBtn)playBtn.addEventListener("click",function(){ setPlaying(!playing); });
+    var api={ start:function(){ if(!raf)raf=requestAnimationFrame(frame); setPlaying(true); if(arm3d)arm3d.start(); },
+      stop:function(){ setPlaying(false); if(arm3d)arm3d.stop(); if(raf){cancelAnimationFrame(raf); raf=null;} },
+      goto:function(d){ day=d; if(scrub)scrub.value=d; renderPanels(); renderArm(); },
+      reload:function(newRob,newJoint,newChannel){ rob=newRob; if(newJoint)joint=newJoint; if(newChannel)channel=newChannel; day=0; if(scrub)scrub.value=0; renderPanels(); renderArm(); },
+      get day(){return day;}, get robot(){return rob;} };
+    renderArm(); renderPanels(); return api;
   }
 
-  // ---------- payoff ----------
-  function renderPayoff(){
-    var e=byId("payoff");
-    var creep=D.robots.find(function(r){ return r.flags.some(function(f){ return f.channel==="thermal"&&f.status==="alarm"; }); });
-    if(!creep){ e.innerHTML="<p style='margin:0'>No joint reached the maintenance alarm this run. Try another simulation to see the two-timescale payoff.</p>"; return; }
-    var f=creep.flags.find(function(x){ return x.channel==="thermal"&&x.status==="alarm"; });
-    var firstWarn=creep.runs.find(function(run){ return run.weakest_joint===f.joint&&run.verdict!=="PASS"; });
-    var until=firstWarn?D.meta.dates[firstWarn.day]:"the end", lead=firstWarn?(firstWarn.day-f.detected_day):0;
-    var leadPhrase=(firstWarn&&lead>0)
-      ? ", <strong>"+lead+" days earlier</strong>, and marked it too bad to operate on "+D.meta.dates[f.cap_cross_day]+"." : ".";
-    e.innerHTML="<p style='margin:0 0 8px'>On <strong>"+creep.robot_id+"</strong>, the <strong>"+f.joint+"</strong> joint passed its per-run gate every run until "
-      +until+". The maintenance layer called for attention on <strong>"+D.meta.dates[f.detected_day]+"</strong>"+leadPhrase
-      +"</p><p style='margin:0;color:var(--muted)'>Same registers, two timescales. The longitudinal layer buys a scheduled fix instead of a mid-collection failure, without claiming a date it cannot honestly know.</p>";
+  // ================= the 3D WidowX arm (film centerpiece) =================
+  function makeArm3D(o){
+    var canvas=$(o.canvas),stage=$(o.stage),fallback=$(o.fallback),hudDay=$(o.day),hudDate=$(o.date);
+    if(typeof THREE==="undefined"){ if(fallback)fallback.style.display="flex"; return null; }
+    var renderer;
+    try{ renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true,alpha:true}); }
+    catch(e){ if(fallback)fallback.style.display="flex"; return null; }
+    var errShown=false;
+    function reportErr(){ if(errShown)return; errShown=true; if(fallback){ fallback.textContent="3D hit an error; the gate and trend on the right still run."; fallback.style.display="flex"; } }
+
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+    renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    var scene=new THREE.Scene();
+    var camera=new THREE.PerspectiveCamera(40,1,0.1,100);
+    scene.add(new THREE.HemisphereLight(0x9fb6ff,0x0a0d12,0.5));
+    var key=new THREE.DirectionalLight(0xffffff,1.05); key.position.set(5,9,5); key.castShadow=true;
+    key.shadow.mapSize.set(1024,1024); key.shadow.camera.near=1; key.shadow.camera.far=30;
+    key.shadow.camera.left=-7; key.shadow.camera.right=7; key.shadow.camera.top=9; key.shadow.camera.bottom=-2; key.shadow.bias=-0.0004; scene.add(key);
+    var fill=new THREE.DirectionalLight(0x88aaff,0.3); fill.position.set(-6,4,-5); scene.add(fill);
+    var ground=new THREE.Mesh(new THREE.CircleGeometry(8,56),new THREE.MeshStandardMaterial({color:0x0f131a,roughness:1,metalness:0}));
+    ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
+
+    function servoMat(){ return new THREE.MeshStandardMaterial({color:0x2b3038,metalness:0.28,roughness:0.5,emissive:0x000000,emissiveIntensity:1}); }
+    function hornMat(){ return new THREE.MeshStandardMaterial({color:0x7a8493,metalness:0.75,roughness:0.35}); }
+    function railMat(){ return new THREE.MeshStandardMaterial({color:0x12151b,metalness:0.5,roughness:0.45}); }
+    function fingerMat(){ return new THREE.MeshStandardMaterial({color:0x0e1014,metalness:0.5,roughness:0.5}); }
+    var servoMeshes={};
+    function servo(name,w,h,d,horn){ var g=new THREE.Group();
+      var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),servoMat()); m.castShadow=true; m.userData.joint=name; servoMeshes[name]=m; g.add(m);
+      if(horn){ var c=new THREE.Mesh(new THREE.CylinderGeometry(h*0.34,h*0.34,w+0.04,20),hornMat()); c.rotation.z=Math.PI/2; c.castShadow=true; g.add(c); }
+      return g; }
+    function rail(len,t){ var m=new THREE.Mesh(new THREE.BoxGeometry(t,len,t*0.6),railMat()); m.castShadow=true; m.position.y=len/2; return m; }
+
+    var L1=1.7,L2=1.5,SHY=1.25;
+    var root=new THREE.Group(); scene.add(root);
+    var base=new THREE.Mesh(new THREE.CylinderGeometry(0.85,1.0,0.3,40),new THREE.MeshStandardMaterial({color:0x14181f,metalness:0.4,roughness:0.6}));
+    base.position.y=0.15; base.castShadow=true; root.add(base);
+    root.add(servo("waist",0.85,0.6,0.85,false)); servoMeshes.waist.parent.position.y=0.62;
+    var shoulderPivot=new THREE.Group(); shoulderPivot.position.y=SHY; root.add(shoulderPivot);
+    var shL=servo("shoulder",0.42,0.62,0.66,true); shL.position.x=-0.34; shoulderPivot.add(shL);
+    var shR=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.62,0.66),servoMat()); shR.position.x=0.34; shR.castShadow=true; shoulderPivot.add(shR);
+    shoulderPivot.add(rail(L1,0.26));
+    var elbowPivot=new THREE.Group(); elbowPivot.position.y=L1; shoulderPivot.add(elbowPivot);
+    elbowPivot.add(servo("elbow",0.5,0.56,0.62,true));
+    elbowPivot.add(rail(L2,0.22));
+    var foreS=servo("forearm_roll",0.3,0.34,0.34,false); foreS.position.y=L2*0.55; elbowPivot.add(foreS);
+    var wristPivot=new THREE.Group(); wristPivot.position.y=L2; elbowPivot.add(wristPivot);
+    wristPivot.add(servo("wrist_angle",0.4,0.42,0.46,true));
+    var wr=servo("wrist_rotate",0.3,0.3,0.3,false); wr.position.y=0.32; wristPivot.add(wr);
+    var gripBase=servo("gripper",0.36,0.22,0.42,false); gripBase.position.y=0.52; wristPivot.add(gripBase);
+    function finger(sx){ var f=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.4,0.18),fingerMat()); f.position.set(sx,0.78,0); f.castShadow=true; wristPivot.add(f); return f; }
+    var fL=finger(-0.15), fR=finger(0.15);
+    var GLEN=0.95;
+    var graspAnchor=new THREE.Object3D(); graspAnchor.position.y=GLEN; wristPivot.add(graspAnchor);
+
+    var BH=0.34,GAP=0.015,MAX=4;
+    var SROW={x0:1.2,dx:0.42,z:0.95}, stackPos=new THREE.Vector3(1.2,0,-1.05);
+    var TRAYTOP=0.05,PADTOP=0.05;
+    var pad=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.05,0.6),new THREE.MeshStandardMaterial({color:0x222a36,metalness:0.2,roughness:0.9}));
+    pad.position.set(stackPos.x,0.025,stackPos.z); pad.receiveShadow=true; scene.add(pad);
+    var tray=new THREE.Mesh(new THREE.BoxGeometry(MAX*SROW.dx+0.2,0.05,0.5),new THREE.MeshStandardMaterial({color:0x171c24,metalness:0.3,roughness:0.85}));
+    tray.position.set(SROW.x0+(MAX-1)*SROW.dx/2,0.025,SROW.z); tray.receiveShadow=true; scene.add(tray);
+    var BCOLORS=[0xcf6b4f,0x4f86cf,0x57b079,0xd0a24a];
+    function blockMesh(i){ var m=new THREE.Mesh(new THREE.BoxGeometry(BH,BH,BH),new THREE.MeshStandardMaterial({color:BCOLORS[i%4],metalness:0.15,roughness:0.6})); m.castShadow=true; m.receiveShadow=true; return m; }
+    var blocks=[]; for(var bi=0;bi<MAX;bi++){ var bm=blockMesh(bi); scene.add(bm); blocks.push(bm); }
+    function homeSource(){ for(var i=0;i<MAX;i++) blocks[i].position.set(SROW.x0+i*SROW.dx, TRAYTOP+BH/2, SROW.z); }
+    homeSource();
+    var placeBaseY=PADTOP+BH/2, placedCount=0;
+
+    function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+    function solveIK(T){ var wy=T.y+GLEN, yaw=Math.atan2(T.x,T.z), r=Math.sqrt(T.x*T.x+T.z*T.z), dh=wy-SHY;
+      var D=clamp(Math.sqrt(r*r+dh*dh),Math.abs(L1-L2)+0.04,L1+L2-0.04), alpha=Math.atan2(dh,r),
+        beta=Math.acos(clamp((L1*L1+D*D-L2*L2)/(2*L1*D),-1,1)), gamma=Math.acos(clamp((L1*L1+L2*L2-D*D)/(2*L1*L2),-1,1));
+      var shRot=(Math.PI/2-(alpha+beta)), elRot=(Math.PI-gamma); return {yaw:yaw,sh:shRot,el:elRot,wr:Math.PI-(shRot+elRot)}; }
+    var cur={yaw:0,sh:0.2,el:0.4,wr:0.3};
+    function applyIK(s,a){ a=a==null?1:a; cur.yaw+=(s.yaw-cur.yaw)*a; cur.sh+=(s.sh-cur.sh)*a; cur.el+=(s.el-cur.el)*a; cur.wr+=(s.wr-cur.wr)*a;
+      root.rotation.y=cur.yaw; shoulderPivot.rotation.x=cur.sh; elbowPivot.rotation.x=cur.el; wristPivot.rotation.x=cur.wr; }
+
+    function cyclePlan(){ var aIdx=MAX-1-placedCount, s=blocks[aIdx].position, py=placeBaseY+placedCount*(BH+GAP);
+      return { aIdx:aIdx, py:py, steps:[
+        {x:s.x,y:1.25,z:s.z,g:1,d:0.5},{x:s.x,y:s.y,z:s.z,g:1,d:0.45},{x:s.x,y:s.y,z:s.z,g:0,d:0.3,e:"grab"},
+        {x:s.x,y:1.35,z:s.z,g:0,d:0.45},{x:stackPos.x,y:1.5,z:stackPos.z,g:0,d:0.65},{x:stackPos.x,y:py,z:stackPos.z,g:0,d:0.5},
+        {x:stackPos.x,y:py,z:stackPos.z,g:1,d:0.3,e:"place"},{x:stackPos.x,y:1.55,z:stackPos.z,g:1,d:0.4} ] }; }
+    var cyc=cyclePlan(),plan=cyc.steps,pi=0,ptime=0,prevT=new THREE.Vector3(SROW.x0,1.25,SROW.z),grip=1,carrying=false,active=null,tmp=new THREE.Vector3();
+    function taskStep(dt){ var p=plan[pi]; ptime+=dt; var f=clamp(ptime/p.d,0,1),ease=f<0.5?2*f*f:1-Math.pow(-2*f+2,2)/2;
+      tmp.set(prevT.x+(p.x-prevT.x)*ease, prevT.y+(p.y-prevT.y)*ease, prevT.z+(p.z-prevT.z)*ease);
+      applyIK(solveIK(tmp),0.35);
+      grip+=((p.g?1:0)-grip)*0.25; var open=0.10+0.10*grip; fL.position.x=-open; fR.position.x=open;
+      if(carrying&&active) graspAnchor.getWorldPosition(active.position);
+      if(f>=1){ if(p.e==="grab"){ carrying=true; active=blocks[cyc.aIdx]; }
+        else if(p.e==="place"){ carrying=false; if(active) active.position.set(stackPos.x,cyc.py,stackPos.z); active=null; placedCount++; }
+        prevT.set(p.x,p.y,p.z); ptime=0; pi++;
+        if(pi>=plan.length){ pi=0; if(placedCount>=MAX){ placedCount=0; homeSource(); } cyc=cyclePlan(); plan=cyc.steps; } } }
+
+    var curTemps={};
+    function applyHeat(){ JOINTS.forEach(function(j){ var m=servoMeshes[j.name]; if(!m)return; var t=curTemps[j.name]; if(t==null)return; var c=heatRGB(t,j.limit);
+      m.material.emissive.setRGB(c[0],c[1],c[2]); m.material.emissiveIntensity=clamp((t-(j.limit-25))/25,0.1,0.95); }); }
+
+    var az=0.65,el=0.42,rad=8.6,target=new THREE.Vector3(0,1.7,0),autoRot=true;
+    function place(){ camera.position.set(target.x+rad*Math.cos(el)*Math.sin(az),target.y+rad*Math.sin(el),target.z+rad*Math.cos(el)*Math.cos(az)); camera.lookAt(target); }
+    var dragging=false,lx=0,ly=0;
+    stage.addEventListener("pointerdown",function(e){ dragging=true; autoRot=false; lx=e.clientX; ly=e.clientY; });
+    window.addEventListener("pointerup",function(){ dragging=false; });
+    window.addEventListener("pointermove",function(e){ if(dragging){ az-=(e.clientX-lx)*0.008; el=clamp(el+(e.clientY-ly)*0.006,0.06,1.3); lx=e.clientX; ly=e.clientY; place(); } else onHover(e); });
+    if($(o.reset))$(o.reset).addEventListener("click",function(){ az=0.65; el=0.42; autoRot=true; place(); });
+
+    var rayc=new THREE.Raycaster(),mouse=new THREE.Vector2();
+    function onHover(e){ var r=canvas.getBoundingClientRect(); if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom){tip.style.opacity=0;return;}
+      mouse.x=((e.clientX-r.left)/r.width)*2-1; mouse.y=-((e.clientY-r.top)/r.height)*2+1; rayc.setFromCamera(mouse,camera);
+      var hits=rayc.intersectObjects(Object.keys(servoMeshes).map(function(k){return servoMeshes[k];}));
+      if(hits.length){ var name=hits[0].object.userData.joint,j=JOINTS.find(function(x){return x.name===name;}),t=curTemps[name];
+        tip.style.opacity=1; tip.style.left=e.clientX+"px"; tip.style.top=e.clientY+"px";
+        tip.innerHTML="<b>"+name+"</b> &middot; "+(t==null?"?":t.toFixed(1))+" C<br><span style='color:#8a94a4'>limit "+j.limit+" C &middot; headroom "+(t==null?"":E.thermalHeadroomScore(t,j.limit).toFixed(0)+"/100")+"</span>"; } else tip.style.opacity=0; }
+
+    function resize(){ var w=stage.clientWidth,h=stage.clientHeight; if(!w||!h)return; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
+    window.addEventListener("resize",resize);
+
+    var running=false,raf=null,lastT=0;
+    function loop(ts){ try{ if(!lastT)lastT=ts; var dt=Math.min((ts-lastT)/1000,0.05); lastT=ts;
+        taskStep(dt); if(autoRot){ az+=dt*0.14; place(); } renderer.render(scene,camera);
+      }catch(err){ reportErr(); }
+      if(running) raf=requestAnimationFrame(loop); else raf=null; }
+
+    resize(); place(); applyHeat();
+    return {
+      update:function(day,dateStr,temps){ curTemps=temps; if(hudDay)hudDay.textContent=day; if(hudDate)hudDate.textContent=dateStr; applyHeat();
+        if(!running){ try{ renderer.render(scene,camera); }catch(e){ reportErr(); } } },
+      start:function(){ resize(); if(!running){ running=true; lastT=0; raf=requestAnimationFrame(loop); } },
+      stop:function(){ running=false; }
+    };
   }
 
-  // ---------- arm tabs + top-level render ----------
-  // Tabs are built once per dataset; switching arms only re-highlights and
-  // re-renders the arm panels, not the whole tab strip.
-  function buildTabs(){
-    var t=byId("tabs"); t.innerHTML=""; tabButtons=[];
-    D.robots.forEach(function(r){
-      var b=el("button","tab");
-      b.innerHTML="<span class='sdot' style='background:"+lineColor(armStatus(r))+"'></span>"+r.robot_id;
-      b.addEventListener("click",function(){ selectedArm=r.robot_id; highlightTabs(); renderArm(); });
-      tabButtons.push({b:b,id:r.robot_id}); t.appendChild(b);
-    });
-    highlightTabs();
-  }
-  function highlightTabs(){ tabButtons.forEach(function(x){ x.b.className="tab"+(x.id===selectedArm?" sel":""); }); }
-  function renderArm(){
-    var r=robot(selectedArm); renderGate(r); renderMaint(r);
-  }
-  function render(){
-    byId("synthetic").textContent = D.meta.generated_note+"  "+D.meta.fleet_size+" WidowX-250 arms, "
-      +D.meta.runs_per_day+" runs/day over "+D.meta.days+" days ("+D.meta.start_date+" to "+D.meta.end_date
-      +"). 7 joints; shoulder and elbow are each driven by two servos on the real arm. Real register reads: src/interface.py.";
-    renderHow();
-    if(!selectedArm||!robot(selectedArm)){
-      var planted=D.robots.find(function(r){ return r.flags.length; });
-      selectedArm=(planted||D.robots[0]).robot_id;
-    }
-    buildTabs(); renderArm(); renderPayoff();
-    var th=D.meta.thresholds;
-    byId("footer").innerHTML="Thresholds are illustrative pending fleet validation, except the servo datasheet limits "
-      +"(80 C XM430, 72 C XL430). CUSUM k = "+th.cusum_k_sigma+" sigma, h = "+th.cusum_h_sigma+" sigma, baseline "
-      +th.baseline_days+" days; a joint is flagged only with both a CUSUM detection and a drop past the watch level. "
-      +"See the README for the audit and the real register reads.";
-  }
+  // ---------- SCENE 0: hero ----------
+  (function hero(){
+    var rob=robotById(DS,"wx-03"),arm=$("heroArm"),lines=$("heroLines"),blame=$("blame");
+    var hphase=0,hday=0,hlast=0,hacc=0,running=true,raf=null;
+    var elbowRaw=rob.maintenance.elbow.thermal.raw;
+    var loT=BASE.elbow-1, hiT=LIM.elbow; // axis bounds from config, not literals
+    function lineSVG(day){ var W=440,H=120,pad=24,pw=W-pad*2,ph=H-pad*2;
+      var X=function(d){return pad+d/29*pw;}, tY=function(t){return pad+(1-(t-loT)/(hiT-loT))*ph;};
+      var tp=[],sp=[]; for(var d=0;d<=day;d++){ tp.push(X(d).toFixed(1)+","+tY(elbowRaw[d]).toFixed(1));
+        var succ=92-Math.max(0,d-9)*1.6; sp.push(X(d).toFixed(1)+","+(pad+(1-(succ-55)/(95-55))*ph).toFixed(1)); }
+      return "<svg viewBox='0 0 "+W+" "+H+"'>"
+        +"<polyline fill='none' stroke='#e85d5d' stroke-width='2.5' points='"+tp.join(" ")+"'/>"
+        +"<polyline fill='none' stroke='#8a94a4' stroke-width='2' stroke-dasharray='3 3' points='"+sp.join(" ")+"'/>"
+        +"<text x='"+(W-pad)+"' y='"+(tY(elbowRaw[day])-6)+"' text-anchor='end' font-size='10' fill='#e85d5d'>motor temperature</text>"
+        +"<text x='"+(W-pad)+"' y='"+(pad+(1-((92-Math.max(0,day-9)*1.6)-55)/(95-55))*ph+13)+"' text-anchor='end' font-size='10' fill='#8a94a4'>AI eval (illustrative)</text></svg>"; }
+    function hframe(ts){ if(!running)return; if(!hlast)hlast=ts; var dt=(ts-hlast)/1000; hlast=ts; hphase=(hphase+dt*0.4)%1;
+      arm.innerHTML=armSVG(hphase,tempsAt(rob,hday),"elbow");
+      hacc+=dt; if(hacc>0.18){ hacc=0; hday=(hday+1)%30; lines.innerHTML=lineSVG(hday);
+        blame.innerHTML = hday<11 ? "<span style='color:#8a94a4'>Every reading looks fine.</span>"
+          : (hday<22 ? "<span style='color:#e85d5d'>The policy regressed. Pull the model?</span>"
+          : "<span style='color:#2fb36a'>No. The motor overheated. The data was corrupt.</span>"); }
+      raf=requestAnimationFrame(hframe); }
+    var heroApi={ start:function(){ if(!running){running=true;hlast=0;raf=requestAnimationFrame(hframe);} }, stop:function(){ running=false; if(raf){cancelAnimationFrame(raf); raf=null;} } };
+    window.__heroApi=heroApi; heroApi.start();
+  })();
 
-  // ---------- controls ----------
-  function showRef(){ D=REFERENCE; selectedArm=null; render(); byId("runlabel").textContent="Reference fleet (Python, seed 20260626)."; }
-  function showGen(seed){ D=window.RVEngine.buildDataset(seed); selectedArm=null; render(); byId("runlabel").textContent="Generated in your browser, seed "+seed+"."; }
-  showRef();
-  var seedInput=byId("seed");
-  if(hasEngine){
-    byId("btn-new").addEventListener("click",function(){ var s=Math.floor(Math.random()*1e9); seedInput.value=s; showGen(s); });
-    byId("btn-run").addEventListener("click",function(){ var v=seedInput.value; var s=(v===""||isNaN(+v))?Math.floor(Math.random()*1e9):(Math.abs(+v)>>>0); seedInput.value=s; showGen(s); });
-    byId("btn-reset").addEventListener("click",showRef);
-  } else {
-    ["btn-new","btn-run","btn-reset"].forEach(function(id){ byId(id).disabled=true; });
-    byId("runlabel").textContent="engine.js not loaded; reference fleet only.";
-  }
-  byId("overlay").addEventListener("click",function(ev){ if(ev.target===byId("overlay"))byId("overlay").classList.remove("show"); });
+  // ---------- SCENE 1: film (3D arm) ----------
+  var wx03=robotById(DS,"wx-03"), wx03m=wx03.maintenance.elbow.thermal;
+  var CALLED=firstFlag(wx03m.status_by_day), CAP=wx03m.cap_cross_day, GATEWARN=firstGateWarn(wx03);
+  var GATELEAD=(GATEWARN<0?30:GATEWARN)-CALLED;
+  var arm3d=makeArm3D({canvas:"filmCanvas",stage:"filmStage",day:"film3dDay",date:"film3dDate",fallback:"film3dFallback",reset:"film3dReset"});
+  var filmOpts={robot:wx03,joint:"elbow",channel:"thermal",runs:"filmRuns",trend:"filmTrend",note:"filmNote",scrub:"filmScrub",play:"filmPlay",dayEl:"filmDay",dateEl:"filmDate"};
+  if(arm3d){ filmOpts.arm3d=arm3d; } else { $("filmCanvas").style.display="none"; $("filmArm2d").style.display="block"; filmOpts.arm="filmArm2d"; }
+  var film=makeView(filmOpts);
+  $("jumpCatch").textContent="Jump to the catch (day "+CALLED+")";
+  $("jumpCatch").addEventListener("click",function(){ film.goto(CALLED); $("call").scrollIntoView({behavior:"smooth"}); });
+
+  // ---------- SCENE 2: make the call ----------
+  $("callKicker").innerHTML="day "+CALLED+" &middot; your call";
+  var callDone=false;
+  Array.prototype.forEach.call(document.querySelectorAll("#callBtns .btn"),function(b){
+    b.addEventListener("click",function(){ if(callDone)return; callDone=true; var choice=b.getAttribute("data-c");
+      $("callGate").innerHTML="<span class='verdictbig v PASS'>PASS &middot; collect</span><p class='tnote'>All seven joints are inside their per-run limits. The fast check sees nothing wrong today, and would keep saying collect for "+GATELEAD+" more days.</p>";
+      $("callTrend").innerHTML="<span class='verdictbig v WARN'>already flagged</span><p class='tnote'>The patient daily trend tripped on <b class='call'>day "+CALLED+"</b> and called for maintenance. It will not cross the action cap (the plan-the-repair line, set safely below the hardware limit) until day "+CAP+", so you have "+(CAP-CALLED)+" days to schedule a fix.</p>";
+      $("callMoney").innerHTML=(choice==="pull"?"Good call. ":"If you collected, you are in good company, and that is the trap. ")+"The fast check said go, so it felt safe, and you would have banked <span class='hlr'>days of quietly corrupted data</span> before anything warned you. The patient trend already knew. <span class='hl'>Same sensors, two timescales.</span>";
+      $("callReveal").style.display="block"; $("callBtns").style.opacity=".5";
+      $("callReveal").scrollIntoView({behavior:"smooth",block:"nearest"}); });
+  });
+
+  // ---------- SCENE 3: audit ----------
+  var FAULTS=[
+    {n:"Motor overheating",v:"keep",r:"A hot motor cannot deliver the torque it is told to, and no camera can see that. AutoEval measured an eval regression from exactly this, on this arm. This is the one."},
+    {n:"Motor effort and wear",v:"cand",r:"A binding joint corrupts motion the same silent way. The physics is certain, the rate it wears on these gears is not, so it ships labeled a candidate, not claimed."},
+    {n:"Voltage sag",v:"sec",r:"Real but rare and usually noticed. Kept only as a free secondary read off a register already on the bus. No test built for it."},
+    {n:"Camera tilt",v:"cut",r:"A shifted view is exactly the variation the policy is built to handle. Flagging it would fight the whole point of a closed-loop model."},
+    {n:"Pose accuracy",v:"cut",r:"Testing open-loop precision on a closed-loop robot. The policy watches the object and adapts, it never reaches a memorized pose. Wrong test for this robot."},
+    {n:"Encoder drift",v:"cut",r:"Contactless magnetic encoder, no wear surface. It fails abruptly, so there is no slow climb for a trend detector to catch."},
+    {n:"Gripper pad wear",v:"cut",r:"Designed the test in full, then cut it on frequency: these pads are not documented to wear here, and a slip shows up in the recording anyway. Chose not to, not could not."}
+  ];
+  (function(){ var box=$("faults"); FAULTS.forEach(function(f,i){ box.insertAdjacentHTML("beforeend",
+    "<div class='fault' id='f"+i+"'><div class='fn'>"+f.n+"</div><div class='fr'>"+f.r+"</div></div>"); }); })();
+  var auditRan=false;
+  $("runAudit").addEventListener("click",function(){ if(auditRan)return; auditRan=true; this.disabled=true; $("auditStatus").textContent="filtering...";
+    FAULTS.forEach(function(f,i){ setTimeout(function(){ var el=$("f"+i);
+      if(f.v==="cut"){ el.className="fault gone"; el.querySelector(".fr").innerHTML=f.r+" <span class='tag cut'>CUT</span>"; }
+      else if(f.v==="keep"){ el.className="fault keep"; el.querySelector(".fr").innerHTML=f.r+" <span class='tag keep'>KEEP &middot; PROVEN</span>"; }
+      else if(f.v==="sec"){ el.className="fault sec"; el.querySelector(".fr").innerHTML=f.r+" <span class='tag sec'>SECONDARY READ</span>"; }
+      else { el.className="fault cand"; el.querySelector(".fr").innerHTML=f.r+" <span class='tag cand'>CANDIDATE</span>"; }
+      if(i===FAULTS.length-1)$("auditStatus").textContent="One proven fault, one labeled candidate, one free secondary read. The rest are noise on a closed-loop robot.";
+    }, 320*(i+1)); }); });
+
+  // ---------- SCENE 4: sandbox ----------
+  (function(){ var js=$("sbJoint"); JOINTS.forEach(function(j){ js.insertAdjacentHTML("beforeend","<option value='"+j.name+"'"+(j.name==="elbow"?" selected":"")+">"+j.name+"</option>"); });
+    var os=$("sbOnset"); for(var d=4;d<=16;d+=2)os.insertAdjacentHTML("beforeend","<option value='"+d+"'"+(d===10?" selected":"")+">day "+d+"</option>"); })();
+  function sbCfg(){ return {robot_id:"sandbox",profile:"thermal-creep",creep_joint:$("sbJoint").value,creep_onset_day:+$("sbOnset").value,creep_rate_c_per_day:((+$("sbRate").value)/10)||0.05}; }
+  var sbJoint=$("sbJoint").value;
+  var sb=makeView({robot:customArm(sbCfg(),SEED+101,sbJoint),joint:sbJoint,channel:"thermal",arm:"sbArm",runs:"sbRuns",trend:"sbTrend",note:"sbNote",scrub:"sbScrub",play:"sbPlay",dayEl:"sbDay"});
+  var sbSeed=SEED+101;
+  $("sbRun").addEventListener("click",function(){ sbSeed+=7; sbJoint=$("sbJoint").value; var cfg=sbCfg();
+    sb.reload(customArm(cfg,sbSeed,sbJoint),sbJoint,"thermal"); sb.stop(); sb.goto(29);
+    var m=sb.robot.maintenance[sbJoint].thermal,called=firstFlag(m.status_by_day),cap=m.cap_cross_day;
+    $("sbNote").innerHTML = called<0 ? "This drift was too slow to flag in 30 days. Try a faster rate or an earlier start."
+      : "<b class='call'>Your fault was caught on day "+called+".</b>"+(cap!=null?" It crossed the action cap on day "+cap+", a "+(cap-called)+"-day head start." : " It never got bad enough to pull a run in 30 days, so the trend bought you the whole month."); });
+
+  // ---------- SCENE 5: explore the fleet ----------
+  var exDS=DS, exSeed=SEED, exIdx=2;
+  function summaryFor(id){ var f=SIM.fleet.find(function(x){return x.robot_id===id;});
+    if(f.profile==="healthy") return "no fault planted; both checks stay quiet";
+    if(f.profile==="thermal-creep") return "thermal creep; the daily trend flags it before the gate ever warns";
+    if(f.profile==="effort-rise") return "effort rise; only the current channel sees this, heat stays normal";
+    if(f.profile==="acute-hot-start") return "acute spike; the per-run gate quarantines it on the spot"; return ""; }
+  function landDay(rob,f){ var c=firstFlag(rob.maintenance[f.joint][f.channel].status_by_day); return c>=0?c:29; } // jump to the moment something happens
+  var ex=makeView({robot:exDS.robots[2],joint:faultOf("wx-03").joint,channel:faultOf("wx-03").channel,arm:"exArm",runs:"exRuns",trend:"exTrend",note:"exNote",scrub:"exScrub",play:"exPlay",dayEl:"exDay"});
+  (function(){ var box=$("fleet"); SIM.fleet.forEach(function(a,i){ box.insertAdjacentHTML("beforeend",
+      "<div class='arm-mini"+(i===2?" sel":"")+"' data-i='"+i+"'><div class='id'>"+a.robot_id+"</div><div class='pf'>"+a.profile.replace(/-/g," ")+"</div></div>"); });
+    function loadArm(i,doScroll){ exIdx=i; Array.prototype.forEach.call(box.children,function(c){ c.className="arm-mini"+(+c.getAttribute("data-i")===i?" sel":""); });
+      var a=SIM.fleet[i],f=faultOf(a.robot_id),rob=exDS.robots[i];
+      $("exLabel").innerHTML=a.robot_id+" <span class='muted'>&middot; "+summaryFor(a.robot_id)+"</span>";
+      ex.reload(rob,f.joint,f.channel); ex.stop(); ex.goto(landDay(rob,f)); if(doScroll)$("exArm").scrollIntoView({behavior:"smooth",block:"nearest"}); }
+    Array.prototype.forEach.call(box.children,function(c){ c.addEventListener("click",function(){ loadArm(+c.getAttribute("data-i"),true); }); });
+    loadArm(2,false);
+    $("exReroll").addEventListener("click",function(){ exSeed=(SEED+1+Math.floor((window.performance?performance.now():1)*1000))>>>0; exDS=E.buildDataset(exSeed); loadArm(exIdx,false); });
+  })();
+
+  // ---------- play scenes only when visible ----------
+  var views={hero:window.__heroApi,film:film,sandbox:sb,explore:ex};
+  if("IntersectionObserver" in window){
+    var io=new IntersectionObserver(function(es){ es.forEach(function(e){ var v=views[e.target.id]; if(!v)return; if(e.isIntersecting)v.start(); else v.stop(); }); },{threshold:0.2});
+    ["hero","film","sandbox","explore"].forEach(function(id){ io.observe($(id)); });
+  } else { film.start(); }
 })();
 </script>
 </body>

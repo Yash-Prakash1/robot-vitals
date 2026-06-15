@@ -167,35 +167,37 @@
     if (day === cfg.acute_day && runIndex === cfg.acute_run && joint === cfg.acute_joint) return cfg.acute_spike_c;
     return 0.0;
   }
+  function simArm(cfg, rng, days) {
+    var runs = [], dailyTemp = [], dailyCurrent = [];
+    for (var day = 0; day < days; day++) {
+      var dayRuns = [];
+      for (var ri = 0; ri < RUNS_PER_DAY; ri++) {
+        var temps = {};
+        JOINT_NAMES.forEach(function (j) {
+          temps[j] = BASE_TEMP_C[j] + creep(cfg, j, day) + ri * INTRA_DAY_WARMUP_C
+            + acuteSpike(cfg, j, day, ri) + gauss(rng, 0, RUN_NOISE_SIGMA_C);
+        });
+        dayRuns.push(temps);
+        runs.push({ day: day, run_index: ri, temps: temps });
+      }
+      var n = dayRuns.length, tmean = {}, cur = {};
+      JOINT_NAMES.forEach(function (j) {
+        tmean[j] = dayRuns.reduce(function (s, r) { return s + r[j]; }, 0) / n;
+        cur[j] = Math.max(0.0, BASE_CURRENT_A[j] + effortRise(cfg, j, day) + gauss(rng, 0, CURRENT_NOISE_SIGMA_A));
+      });
+      dailyTemp.push(tmean); dailyCurrent.push(cur);
+    }
+    return { robot_id: cfg.robot_id, profile: cfg.profile, runs: runs,
+      daily_temp_c: dailyTemp, daily_current_a: dailyCurrent };
+  }
   function simulateFleet(seed, days) {
     days = days || 30;
     var rng = mulberry32(seed >>> 0);
-    var arms = [];
-    FLEET.forEach(function (cfg) {
-      var runs = [], dailyTemp = [], dailyCurrent = [];
-      for (var day = 0; day < days; day++) {
-        var dayRuns = [];
-        for (var ri = 0; ri < RUNS_PER_DAY; ri++) {
-          var temps = {};
-          JOINT_NAMES.forEach(function (j) {
-            temps[j] = BASE_TEMP_C[j] + creep(cfg, j, day) + ri * INTRA_DAY_WARMUP_C
-              + acuteSpike(cfg, j, day, ri) + gauss(rng, 0, RUN_NOISE_SIGMA_C);
-          });
-          dayRuns.push(temps);
-          runs.push({ day: day, run_index: ri, temps: temps });
-        }
-        var n = dayRuns.length, tmean = {}, cur = {};
-        JOINT_NAMES.forEach(function (j) {
-          tmean[j] = dayRuns.reduce(function (s, r) { return s + r[j]; }, 0) / n;
-          cur[j] = Math.max(0.0, BASE_CURRENT_A[j] + effortRise(cfg, j, day) + gauss(rng, 0, CURRENT_NOISE_SIGMA_A));
-        });
-        dailyTemp.push(tmean); dailyCurrent.push(cur);
-      }
-      arms.push({ robot_id: cfg.robot_id, profile: cfg.profile, runs: runs,
-        daily_temp_c: dailyTemp, daily_current_a: dailyCurrent });
-    });
+    var arms = FLEET.map(function (cfg) { return simArm(cfg, rng, days); });
     return { days: days, seed: seed, runs_per_day: RUNS_PER_DAY, joints: JOINT_NAMES.slice(), arms: arms };
   }
+  // simulate a single arm with an arbitrary profile and its own seed (used by the sandbox)
+  function simulateArm(cfg, seed, days) { return simArm(cfg, mulberry32((seed >>> 0) || 1), days || 30); }
 
   function series(arm, key, j, n) { return range(n).map(function (d) { return arm[key][d][j]; }); }
 
@@ -289,8 +291,16 @@
   }
 
   root.RVEngine = {
+    // pipeline (used by the grid dashboard)
     buildDataset: buildDataset, simulateFleet: simulateFleet,
+    // primitives reused by the guided experience, so the page does no sim/scoring math itself
+    simulateArm: simulateArm,
+    analyzeThermal: analyzeThermal, analyzeEffort: analyzeEffort,
+    pooledSigma: pooledSigma, evaluateRun: evaluateRun,
     thermalHeadroomScore: thermalHeadroomScore, thermalVerdict: thermalVerdict,
+    // config-derived lookups (single source of truth lives in window.RV_CONFIG)
+    cfg: CFG, jointLimit: JOINT_LIMIT_C, jointNames: JOINT_NAMES.slice(),
+    baselineDays: BASELINE_DAYS, runsPerDay: RUNS_PER_DAY, startDate: START_DATE,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = root.RVEngine;
 })(typeof window !== "undefined" ? window : globalThis);

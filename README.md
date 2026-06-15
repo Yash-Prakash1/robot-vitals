@@ -49,15 +49,16 @@ Same sensors, two timescales: block a bad run now, and catch the slow decline be
 
 Open the live demo: **https://yash-prakash1.github.io/robot-vitals/**
 
-Top to bottom, it shows:
+It is a guided tour that walks through the whole idea, scene by scene:
 
-- **How the check works.** It opens by computing, on the worst run in the dataset, the metadata a real check would stamp onto an episode: seven joints read, each scored against its own limit, the weakest one setting the score, and the resulting JSON.
-- **Pick an arm.** Eight simulated robot arms. Five healthy, three each carrying one planted fault. Click between them.
-- **Per-run gate.** Each cell is one test run (four per day, columns are 30 days), colored by verdict. Hover for all seven joint temperatures; click for the full breakdown.
-- **Predictive maintenance.** For each joint, a temperature trend and an effort trend, marked where maintenance was called (drift detected) and where the joint got too degraded to operate.
-- **The payoff.** A joint passes its per-run gate every single run, while the longitudinal layer flagged it days earlier. Same sensors, two timescales.
+- **The cold open.** A motor slowly overheats while the AI eval score slides, and the policy gets blamed for a hardware fault. Documented, not hypothetical.
+- **Watch one arm for 30 days.** A 3D WidowX arm stacks blocks while its servos glow by temperature. Scrub the month and watch two checks read the same sensors: a fast pre-flight gate before every run, and a patient daily trend. The trend notices the creep days before the gate does.
+- **Make the call.** A run is queued, the arm passed its quick check, the trend already flagged it. Collect or pull? The reveal shows what each check knew, with the day numbers computed live.
+- **The audit.** Run ten candidate faults through two filters (can the closed-loop policy compensate, and does it actually recur), and watch the list collapse to one proven fault plus one labeled candidate.
+- **Break an arm yourself.** Pick a joint, a drift speed, and a start day. The gate keeps passing while the trend catches your fault, and the tool reports the lead time without inventing a failure date.
+- **The whole fleet.** Eight arms, three with a planted fault: a slow thermal creep, an effort rise only the current channel sees, and an acute spike only the per-run gate catches. Click any arm to load its story.
 
-Press **New simulation** to roll a fresh fleet in your browser, or type a seed to reproduce one. The data is synthetic; the scoring, drift detection, and gate are the real logic, running live.
+Press **New simulation** in the fleet view to roll a fresh fleet in your browser, or open the dense **[engineer's grid view](https://yash-prakash1.github.io/robot-vitals/dashboard.html)** for the per-run, per-joint dashboard. The data is synthetic; the scoring, drift detection, and gate are the real logic, running live.
 
 ## The problem, in one minute
 
@@ -171,7 +172,8 @@ robot-vitals/
     config.py           reads config.json for the Python core
   tests/                46 tests across the modules above
   docs/
-    index.html          the static, interactive dashboard (served by GitHub Pages)
+    index.html          the guided, interactive demo (served by GitHub Pages)
+    dashboard.html      the dense per-run, per-joint engineer's grid view
     engine.js           in-browser port of the core, reads constants from config.js
     config.js, data.js  emitted from config.json and the pipeline (shared with Python)
 ```
@@ -180,8 +182,8 @@ Pure standard library, no install:
 
 ```
 python3 -m pytest tests/ -q       # 46 tests
-python3 src/generate_dataset.py   # regenerate the dashboard data
-open docs/index.html              # the dashboard
+python3 src/generate_dataset.py   # regenerate the demo data
+open docs/index.html              # the guided demo (or dashboard.html for the grid)
 ```
 
 ## Honest limitations
