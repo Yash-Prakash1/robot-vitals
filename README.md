@@ -4,6 +4,11 @@
 
 **By Yash Prakash.** Live demo (runs in your browser, no install): **https://yash-prakash1.github.io/robot-vitals/**
 
+[![live demo](https://img.shields.io/badge/live_demo-online-2ea44f?style=for-the-badge)](https://yash-prakash1.github.io/robot-vitals/)
+[![tests](https://img.shields.io/badge/tests-46_passing-2ea44f?style=for-the-badge)](https://github.com/Yash-Prakash1/robot-vitals/tree/main/tests)
+![python](https://img.shields.io/badge/python-3.12-3776ab?style=for-the-badge)
+![runtime deps](https://img.shields.io/badge/runtime_deps-none-555?style=for-the-badge)
+
 ## In short
 
 Robot-AI labs train foundation models on real robots, so the robot is the measurement instrument that produces the data. When a robot slowly overheats and degrades, the episodes it records are silently corrupted, and the AI policy gets blamed for what was actually a hardware problem. The published research that runs these robots around the clock documents this exact failure, an overheating drift after about 8 hours, and leaves the fix undefined: its own algorithm says "if robot unhealthy, notify operator," without ever defining "unhealthy."
@@ -20,6 +25,25 @@ Robot-AI labs train foundation models on real robots, so the robot is the measur
 | see the judgment (what to test, what to skip, and why) | [The audit](#the-audit) |
 | see the design decisions and reasoning | [Key decisions](#key-decisions-and-the-thinking-behind-them) |
 | read the code | tested Python in `src/` (46 tests), the dashboard in `docs/` |
+
+> [!TIP]
+> Short on time? Open the **[live demo](https://yash-prakash1.github.io/robot-vitals/)** and click around. The text below is the reasoning behind it.
+
+## How it works, at a glance
+
+```mermaid
+flowchart LR
+  R["Servo registers<br/>(temperature, current)"] --> G{"Per-run gate<br/>before every run"}
+  R --> M{"Daily trend<br/>(CUSUM detector)"}
+  G -->|healthy| C["Collect the data"]
+  G -->|too hot| P["Pull the robot"]
+  M -->|slow drift| W["Call maintenance,<br/>days early"]
+  style C fill:#1f9d57,color:#fff,stroke:#1f9d57
+  style P fill:#d23f3f,color:#fff,stroke:#d23f3f
+  style W fill:#c98300,color:#fff,stroke:#c98300
+```
+
+Same sensors, two timescales: block a bad run now, and catch the slow decline before it ever fails one.
 
 ## Try it in 60 seconds
 
@@ -43,7 +67,8 @@ PI's own AutoEval paper (arXiv:2503.24278, CoRL 2025) documents the failure prec
 
 > Failure: If unable to reset or robot unhealthy, notify human operator to help.
 
-**"Unhealthy" is never defined.** This project defines and detects it.
+> [!IMPORTANT]
+> **"Unhealthy" is never defined.** This project defines and detects it.
 
 The blind spot is shared. AutoEval, PolaRiS (arXiv:2512.16881), and RoboArena (arXiv:2506.18123) all treat the physical robot, when used, as a trusted measurement device. None monitors its health. And the cost compounds: eval data is fed back into training tagged by quality, so a degraded robot's episodes, mislabeled as low-quality policy data, poison the next model.
 
@@ -51,8 +76,8 @@ The blind spot is shared. AutoEval, PolaRiS (arXiv:2512.16881), and RoboArena (a
 
 A dashboard that flags every hardware imperfection is the wrong instinct. These robots run closed-loop visuomotor policies: they look, see where the object actually is, and adapt. They are built to be robust to hardware variation, because that is the entire point of a foundation model. So:
 
-- **Acceptable variation** (tilted camera, slightly imprecise arm, worn-in mechanics): the policy adapts. Do not test for it.
-- **Data contamination** (a fault the policy cannot perceive or compensate for, that silently corrupts the episode): this breaks the science. Test for this.
+- ✅ **Acceptable variation** (tilted camera, slightly imprecise arm, worn-in mechanics): the policy adapts. Do not test for it.
+- ❌ **Data contamination** (a fault the policy cannot perceive or compensate for, that silently corrupts the episode): this breaks the science. Test for this.
 
 Two filters make the cut precise:
 
@@ -66,18 +91,19 @@ The centerpiece. Filtering the robot's full parts list against both filters leav
 
 | Candidate fault | Policy cannot compensate? | Actually occurs here? | Verdict |
 |---|---|---|---|
-| **Motor thermal** | Pass: a hot motor cannot deliver commanded torque, and no vision fixes a throttled actuator | Pass: AutoEval measured score regression from this, on this arm, in normal operation | **Core, proven** |
-| **Motor effort drift** (wear) | Pass: a binding mechanism cannot execute commanded motion | Partial: the physics is certain, but the rate on these gears is unvalidated | **Candidate, labeled** |
-| Gripper pad wear | Partial: a slip is visible in the episode, far less silent than a throttled motor | Fail on frequency: not documented to wear on these foam and sorbothane pads | **Cut on frequency** (see below) |
-| Encoder drift | Pass: corrupts the proprioceptive observation | Fail: contactless magnetic encoder has no wear surface; fails abruptly, not slowly | **Cut** |
-| Comms bus health | Pass: dropped packets break the control loop | Fail: binary, not gradual; already handled in the stack | **Cut** |
-| Gearbox backlash | Partial: closed-loop absorbs moderate backlash | Fail as a direct test: warrantied within cycle life. Caught via the effort channel | **Cut, folded into effort** |
-| Supply voltage sag | Pass: motor cannot source torque the supply lacks | Partial: real but rare and usually noticed; a free register read | **Optional secondary read** |
-| Camera position / tilt | Fail: a shifted view is exactly the variation the policy should handle | (moot) | **Cut** |
-| Depth-sensor calibration | Pass: false depth the policy cannot know is false | Fail: the D405 ships pre-calibrated | **Cut** |
-| Pose repeatability | Fail: the policy sees the object and adapts; it never reaches hardcoded poses | (moot) | **Cut** (testing open-loop precision on a closed-loop robot) |
+| **Motor thermal** | Pass: a hot motor cannot deliver commanded torque, and no vision fixes a throttled actuator | Pass: AutoEval measured score regression from this, on this arm, in normal operation | ✅ **Core, proven** |
+| **Motor effort drift** (wear) | Pass: a binding mechanism cannot execute commanded motion | Partial: the physics is certain, but the rate on these gears is unvalidated | 🟡 **Candidate, labeled** |
+| Gripper pad wear | Partial: a slip is visible in the episode, far less silent than a throttled motor | Fail on frequency: not documented to wear on these foam and sorbothane pads | ❌ **Cut on frequency** (see below) |
+| Encoder drift | Pass: corrupts the proprioceptive observation | Fail: contactless magnetic encoder has no wear surface; fails abruptly, not slowly | ❌ **Cut** |
+| Comms bus health | Pass: dropped packets break the control loop | Fail: binary, not gradual; already handled in the stack | ❌ **Cut** |
+| Gearbox backlash | Partial: closed-loop absorbs moderate backlash | Fail as a direct test: warrantied within cycle life. Caught via the effort channel | ❌ **Cut, folded into effort** |
+| Supply voltage sag | Pass: motor cannot source torque the supply lacks | Partial: real but rare and usually noticed; a free register read | ➕ **Optional secondary read** |
+| Camera position / tilt | Fail: a shifted view is exactly the variation the policy should handle | (moot) | ❌ **Cut** |
+| Depth-sensor calibration | Pass: false depth the policy cannot know is false | Fail: the D405 ships pre-calibrated | ❌ **Cut** |
+| Pose repeatability | Fail: the policy sees the object and adapts; it never reaches hardcoded poses | (moot) | ❌ **Cut** (open-loop precision on a closed-loop robot) |
 
-**The honesty about exclusions is the credibility.** Thermal is the one fault both compensation-proof and documented to occur. Shipping the right monitor for the real problem beats an elaborate dashboard watching faults that do not happen, and the architecture adds the next fault the moment fleet data justifies it.
+> [!NOTE]
+> **The honesty about exclusions is the credibility.** Thermal is the one fault both compensation-proof and documented to occur. Shipping the right monitor for the real problem beats an elaborate dashboard watching faults that do not happen, and the architecture adds the next fault the moment fleet data justifies it.
 
 <details>
 <summary><b>The gripper-wear test I designed in full, then cut (click to expand)</b></summary>
