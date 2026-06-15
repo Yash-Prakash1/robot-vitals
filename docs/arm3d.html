@@ -61,6 +61,13 @@
   if(typeof THREE==="undefined"){ document.getElementById("fallback").style.display="flex"; return; }
   var stage=document.getElementById("stage"), canvas=document.getElementById("c"), tip=document.getElementById("tip");
 
+  // surface any runtime error on the page (so a freeze is never silent)
+  var errBox=null;
+  function reportErr(e){ if(errBox)return; errBox=document.createElement("div");
+    errBox.style.cssText="position:fixed;left:0;right:0;bottom:0;z-index:99;background:#3a0d0d;color:#ffe;padding:10px 14px;font:12px/1.4 monospace;";
+    errBox.textContent="3D error: "+((e&&e.message)||e); document.body.appendChild(errBox); }
+  window.addEventListener("error",function(ev){ reportErr(ev.message+" ("+(ev.filename||"")+":"+(ev.lineno||"")+")"); });
+
   var JOINTS=[{name:"waist",limit:80,base:50},{name:"shoulder",limit:80,base:57},{name:"elbow",limit:80,base:59},
     {name:"forearm_roll",limit:80,base:48},{name:"wrist_angle",limit:80,base:45},{name:"wrist_rotate",limit:72,base:42},{name:"gripper",limit:72,base:40}];
   var START=new Date(Date.UTC(2026,4,15));
@@ -77,7 +84,7 @@
   var camera=new THREE.PerspectiveCamera(40,1,0.1,100);
   scene.add(new THREE.HemisphereLight(0x9fb6ff,0x0a0d12,0.5));
   var key=new THREE.DirectionalLight(0xffffff,1.05); key.position.set(5,9,5); key.castShadow=true;
-  key.shadow.mapSize.set(2048,2048); key.shadow.camera.near=1; key.shadow.camera.far=30;
+  key.shadow.mapSize.set(1024,1024); key.shadow.camera.near=1; key.shadow.camera.far=30;
   key.shadow.camera.left=-7; key.shadow.camera.right=7; key.shadow.camera.top=9; key.shadow.camera.bottom=-2; key.shadow.bias=-0.0004; scene.add(key);
   var fill=new THREE.DirectionalLight(0x88aaff,0.3); fill.position.set(-6,4,-5); scene.add(fill);
   var ground=new THREE.Mesh(new THREE.CircleGeometry(8,56),new THREE.MeshStandardMaterial({color:0x0f131a,roughness:1,metalness:0}));
@@ -212,10 +219,15 @@
   var dayAcc=0;
   document.getElementById("scrub").addEventListener("input",function(){ setDay(+this.value); });
   document.getElementById("play").addEventListener("click",function(){ playing=!playing; this.textContent=playing?"Pause":"Play"; });
-  function loop(ts){ if(!lastT)lastT=ts; var dt=Math.min((ts-lastT)/1000,0.05); lastT=ts;
-    if(playing){ taskStep(dt); dayAcc+=dt; if(dayAcc>1.1){ dayAcc=0; var nd=(day+1)%30; document.getElementById("scrub").value=nd; setDay(nd); } }
-    if(autoRot){ az+=dt*0.14; place(); }
-    renderer.render(scene,camera); requestAnimationFrame(loop); }
+  function loop(ts){
+    try{
+      if(!lastT)lastT=ts; var dt=Math.min((ts-lastT)/1000,0.05); lastT=ts;
+      if(playing){ taskStep(dt); dayAcc+=dt; if(dayAcc>1.1){ dayAcc=0; var nd=(day+1)%30; document.getElementById("scrub").value=nd; setDay(nd); } }
+      if(autoRot){ az+=dt*0.14; place(); }
+      renderer.render(scene,camera);
+    }catch(err){ reportErr(err); }   // never let one bad frame kill the loop
+    requestAnimationFrame(loop);
+  }
   setDay(0); requestAnimationFrame(loop);
 })();
 </script>
