@@ -10,23 +10,23 @@
   body{margin:0;background:radial-gradient(1100px 700px at 50% -5%,#161d2b,var(--bg));color:var(--ink);
     font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
   .wrap{max-width:980px;margin:0 auto;padding:26px 20px 50px;}
-  h1{font-size:20px;margin:0 0 2px;}
-  .sub{color:var(--muted);font-size:13px;margin:0 0 16px;}
+  h1{font-size:20px;margin:0 0 2px;} .sub{color:var(--muted);font-size:13px;margin:0 0 16px;}
   #stage{position:relative;border:1px solid var(--line);border-radius:18px;overflow:hidden;
-    background:radial-gradient(700px 460px at 50% 22%,#19202d,#0c1016);height:62vh;min-height:420px;cursor:grab;}
+    background:radial-gradient(760px 480px at 50% 24%,#1a2230,#0c1016);height:64vh;min-height:440px;cursor:grab;}
   #stage:active{cursor:grabbing;}
   #c{display:block;width:100%;height:100%;}
   #fallback{position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:30px;}
   .hud{position:absolute;left:14px;top:12px;font-size:12px;color:var(--muted);}
+  .hud b{color:#eaeef4;}
   .legend{position:absolute;right:14px;top:12px;display:flex;gap:7px;align-items:center;font-size:11px;color:var(--muted);}
   .legend .bar{height:8px;width:120px;border-radius:6px;background:linear-gradient(90deg,#39b0ff,#2fb36a,#e6a72e,#e85d5d);}
   .drag{position:absolute;right:14px;bottom:12px;font-size:11.5px;color:var(--muted);}
+  .task{position:absolute;left:14px;bottom:12px;font-size:11.5px;color:var(--muted);}
   .controls{margin-top:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px 16px;}
   button{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:9px 16px;font:inherit;font-weight:600;cursor:pointer;}
   button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);font-weight:500;}
   input[type=range]{flex:1;min-width:160px;accent-color:var(--accent);}
-  .daychip{font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px;}
-  .daychip b{color:var(--ink);}
+  .daychip{font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px;} .daychip b{color:var(--ink);}
   .note{margin-top:14px;color:var(--muted);font-size:13px;line-height:1.5;}
   #tip{position:fixed;pointer-events:none;z-index:20;background:#0a0d12;border:1px solid var(--line);color:var(--ink);
     font-size:12px;line-height:1.4;padding:7px 10px;border-radius:9px;opacity:0;transition:opacity .1s;transform:translate(-50%,-120%);white-space:nowrap;}
@@ -35,21 +35,22 @@
 <body>
 <div class="wrap">
   <h1>robot-vitals &middot; 3D arm preview</h1>
-  <p class="sub">WidowX-250 style arm, joints glow by temperature. Drag to rotate, scrub the 30 days, hover a joint. (Preview for review.)</p>
+  <p class="sub">A WidowX-250 style arm stacking blocks. Its servos glow by temperature. Drag to rotate, scrub the 30 days, hover a joint.</p>
   <div id="stage">
     <canvas id="c"></canvas>
-    <div class="hud">Day <b id="dnum" style="color:#eaeef4">0</b> / 30</div>
+    <div class="hud">Day <b id="dnum">0</b> / 30 &middot; <span id="ddate"></span></div>
     <div class="legend"><span>cool</span><span class="bar"></span><span>at limit</span></div>
+    <div class="task">task: stack the blocks</div>
     <div class="drag">drag to rotate</div>
     <div id="fallback">3D needs WebGL. Your browser or device may have it disabled.</div>
   </div>
   <div class="controls">
     <button id="play">Pause</button>
     <input type="range" id="scrub" min="0" max="29" value="0">
-    <span class="daychip">Day <b id="dnum2">0</b>/30 &middot; <span id="ddate"></span></span>
+    <span class="daychip">Day <b id="dnum2">0</b>/30</span>
     <button class="ghost" id="reset">Reset view</button>
   </div>
-  <p class="note">The elbow motor slowly overheats over the month. Watch its servo turn from blue to red while the rest stay cool. This is the visual that anchors the full demo; in the real page it sits beside the live gate and trend panels.</p>
+  <p class="note">The arm runs a real pick-and-place: it reaches into the bin, grasps a block, and stacks it, driven by inverse kinematics. Meanwhile the elbow motor slowly overheats over the month. Watch its servo go from blue to red while the rest stay cool. In the full demo this sits beside the live gate and trend panels.</p>
 </div>
 <div id="tip"></div>
 
@@ -60,133 +61,161 @@
   if(typeof THREE==="undefined"){ document.getElementById("fallback").style.display="flex"; return; }
   var stage=document.getElementById("stage"), canvas=document.getElementById("c"), tip=document.getElementById("tip");
 
-  // ---- temperature model (mirrors config.json) ----
-  var JOINTS=[
-    {name:"waist",limit:80,base:50},{name:"shoulder",limit:80,base:57},{name:"elbow",limit:80,base:59},
-    {name:"forearm_roll",limit:80,base:48},{name:"wrist_angle",limit:80,base:45},
-    {name:"wrist_rotate",limit:72,base:42},{name:"gripper",limit:72,base:40}
-  ];
+  var JOINTS=[{name:"waist",limit:80,base:50},{name:"shoulder",limit:80,base:57},{name:"elbow",limit:80,base:59},
+    {name:"forearm_roll",limit:80,base:48},{name:"wrist_angle",limit:80,base:45},{name:"wrist_rotate",limit:72,base:42},{name:"gripper",limit:72,base:40}];
   var START=new Date(Date.UTC(2026,4,15));
-  function tempAt(j,day){ var creep=(j.name==="elbow"&&day>=10)?(day-10)*0.6:0; return j.base+creep+1.8; }
-  function heat(t,limit){ // headroom -> color, cool blue to red
-    var h=Math.max(0,Math.min(1,(limit-t)/25));
-    var stops=[[0,[232,93,93]],[0.32,[230,167,46]],[0.62,[47,179,106]],[1,[57,176,255]]];
-    for(var i=0;i<stops.length-1;i++){ if(h>=stops[i][0]&&h<=stops[i+1][0]){ var f=(h-stops[i][0])/(stops[i+1][0]-stops[i][0]);
-      var a=stops[i][1],b=stops[i+1][1]; return [a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f].map(function(x){return x/255;}); } }
-    return [57/255,176/255,255/255];
-  }
+  function tempAt(j,day){ return j.base+((j.name==="elbow"&&day>=10)?(day-10)*0.6:0)+1.8; }
+  function heat(t,limit){ var h=Math.max(0,Math.min(1,(limit-t)/25));
+    var s=[[0,[232,93,93]],[0.32,[230,167,46]],[0.62,[47,179,106]],[1,[57,176,255]]];
+    for(var i=0;i<s.length-1;i++){ if(h>=s[i][0]&&h<=s[i+1][0]){ var f=(h-s[i][0])/(s[i+1][0]-s[i][0]),a=s[i][1],b=s[i+1][1];
+      return [a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f].map(function(x){return x/255;}); } } return [0.22,0.69,1]; }
 
-  // ---- three.js scene ----
   var renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true,alpha:true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
   renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   var scene=new THREE.Scene();
-  var camera=new THREE.PerspectiveCamera(42,1,0.1,100);
-  // lights
-  scene.add(new THREE.HemisphereLight(0x9fb6ff,0x0a0d12,0.55));
-  var key=new THREE.DirectionalLight(0xffffff,1.0); key.position.set(5,9,6); key.castShadow=true;
-  key.shadow.mapSize.set(1024,1024); key.shadow.camera.near=1; key.shadow.camera.far=30;
-  key.shadow.camera.left=-6; key.shadow.camera.right=6; key.shadow.camera.top=8; key.shadow.camera.bottom=-2; scene.add(key);
-  var fill=new THREE.DirectionalLight(0x88aaff,0.35); fill.position.set(-6,3,-4); scene.add(fill);
-  // ground
-  var ground=new THREE.Mesh(new THREE.CircleGeometry(7,48),new THREE.MeshStandardMaterial({color:0x10141b,roughness:1,metalness:0}));
-  ground.rotation.x=-Math.PI/2; ground.position.y=0; ground.receiveShadow=true; scene.add(ground);
+  var camera=new THREE.PerspectiveCamera(40,1,0.1,100);
+  scene.add(new THREE.HemisphereLight(0x9fb6ff,0x0a0d12,0.5));
+  var key=new THREE.DirectionalLight(0xffffff,1.05); key.position.set(5,9,5); key.castShadow=true;
+  key.shadow.mapSize.set(2048,2048); key.shadow.camera.near=1; key.shadow.camera.far=30;
+  key.shadow.camera.left=-7; key.shadow.camera.right=7; key.shadow.camera.top=9; key.shadow.camera.bottom=-2; key.shadow.bias=-0.0004; scene.add(key);
+  var fill=new THREE.DirectionalLight(0x88aaff,0.3); fill.position.set(-6,4,-5); scene.add(fill);
+  var ground=new THREE.Mesh(new THREE.CircleGeometry(8,56),new THREE.MeshStandardMaterial({color:0x0f131a,roughness:1,metalness:0}));
+  ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
 
   // ---- materials ----
-  function linkMat(){ return new THREE.MeshStandardMaterial({color:0x1b1f27,metalness:0.45,roughness:0.5}); }
-  function servoMat(){ return new THREE.MeshStandardMaterial({color:0x2a2f38,metalness:0.3,roughness:0.55,emissive:0x000000,emissiveIntensity:1}); }
-  function metalMat(){ return new THREE.MeshStandardMaterial({color:0x6b7686,metalness:0.7,roughness:0.4}); }
-  var servoMeshes={}; // joint name -> mesh (for heat coloring + hover)
+  function railMat(){ return new THREE.MeshStandardMaterial({color:0x12151b,metalness:0.5,roughness:0.45}); }
+  function servoMat(){ return new THREE.MeshStandardMaterial({color:0x2b3038,metalness:0.28,roughness:0.5,emissive:0x000000,emissiveIntensity:1}); }
+  function hornMat(){ return new THREE.MeshStandardMaterial({color:0x7a8493,metalness:0.75,roughness:0.35}); }
+  function fingerMat(){ return new THREE.MeshStandardMaterial({color:0x0e1014,metalness:0.5,roughness:0.5}); }
+  var servoMeshes={};
 
-  function servo(name,w,h,d){ var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),servoMat()); m.castShadow=true; m.userData.joint=name; servoMeshes[name]=m; return m; }
-  function link(len,thick){ var m=new THREE.Mesh(new THREE.BoxGeometry(thick,len,thick),linkMat()); m.castShadow=true; m.position.y=len/2; return m; }
+  function servo(name,w,h,d,horn){ var g=new THREE.Group();
+    var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),servoMat()); m.castShadow=true; m.userData.joint=name; servoMeshes[name]=m; g.add(m);
+    if(horn){ var c=new THREE.Mesh(new THREE.CylinderGeometry(h*0.34,h*0.34,w+0.04,20),hornMat()); c.rotation.z=Math.PI/2; c.castShadow=true; g.add(c); }
+    return g; }
+  function rail(len,t){ var m=new THREE.Mesh(new THREE.BoxGeometry(t,len,t*0.6),railMat()); m.castShadow=true; m.position.y=len/2; return m; }
 
-  // ---- build the arm hierarchy (FK) ----
+  // ---- arm hierarchy ----
+  var L1=1.7, L2=1.5, SHY=1.25;
   var root=new THREE.Group(); scene.add(root);
-  // base + waist
-  var basePlate=new THREE.Mesh(new THREE.CylinderGeometry(0.95,1.05,0.28,32),new THREE.MeshStandardMaterial({color:0x161a22,metalness:0.4,roughness:0.6}));
-  basePlate.position.y=0.14; basePlate.castShadow=true; root.add(basePlate);
-  var waistS=servo("waist",1.0,0.55,1.0); waistS.position.y=0.55; root.add(waistS);
+  var base=new THREE.Mesh(new THREE.CylinderGeometry(0.85,1.0,0.3,40),new THREE.MeshStandardMaterial({color:0x14181f,metalness:0.4,roughness:0.6}));
+  base.position.y=0.15; base.castShadow=true; root.add(base);
+  root.add(servo("waist",0.85,0.6,0.85,false)); servoMeshes.waist.parent.position.y=0.62;
+  var shoulderPivot=new THREE.Group(); shoulderPivot.position.y=SHY; root.add(shoulderPivot);
+  // dual shoulder servos (the WidowX signature)
+  var shL=servo("shoulder",0.42,0.62,0.66,true); shL.position.x=-0.34; shoulderPivot.add(shL);
+  var shR=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.62,0.66),servoMat()); shR.position.x=0.34; shR.castShadow=true; shoulderPivot.add(shR);
+  shoulderPivot.add(rail(L1,0.26));
+  var elbowPivot=new THREE.Group(); elbowPivot.position.y=L1; shoulderPivot.add(elbowPivot);
+  elbowPivot.add(servo("elbow",0.5,0.56,0.62,true));
+  elbowPivot.add(rail(L2,0.22));
+  var foreS=servo("forearm_roll",0.3,0.34,0.34,false); foreS.position.y=L2*0.55; elbowPivot.add(foreS);
+  var wristPivot=new THREE.Group(); wristPivot.position.y=L2; elbowPivot.add(wristPivot);
+  wristPivot.add(servo("wrist_angle",0.4,0.42,0.46,true));
+  var wr=servo("wrist_rotate",0.3,0.3,0.3,false); wr.position.y=0.32; wristPivot.add(wr);
+  var gripBase=servo("gripper",0.36,0.22,0.42,false); gripBase.position.y=0.52; wristPivot.add(gripBase);
+  function finger(sx){ var f=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.4,0.18),fingerMat()); f.position.set(sx,0.78,0); f.castShadow=true; wristPivot.add(f); return f; }
+  var fL=finger(-0.15), fR=finger(0.15);
+  var GLEN=0.95; // wrist pivot to grasp point
+  var graspAnchor=new THREE.Object3D(); graspAnchor.position.y=GLEN; wristPivot.add(graspAnchor);
 
-  var shoulderPivot=new THREE.Group(); shoulderPivot.position.y=0.86; root.add(shoulderPivot);
-  var shoulderS=servo("shoulder",1.25,0.6,0.75); shoulderPivot.add(shoulderS); // dual-servo look (wide)
-  var upper=link(1.7,0.34); upper.position.y=0.0; shoulderPivot.add(upper);
+  // ---- table props: bin of source blocks + a stack pad ----
+  var BH=0.34; // block size
+  var binPos=new THREE.Vector3(1.55,0,1.0), stackPos=new THREE.Vector3(1.2,0,-1.05);
+  var bin=new THREE.Mesh(new THREE.BoxGeometry(1.0,0.12,1.0),new THREE.MeshStandardMaterial({color:0x171c24,metalness:0.3,roughness:0.8}));
+  bin.position.set(binPos.x,0.06,binPos.z); bin.receiveShadow=true; scene.add(bin);
+  var pad=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.05,0.7),new THREE.MeshStandardMaterial({color:0x202632,metalness:0.2,roughness:0.9}));
+  pad.position.set(stackPos.x,0.025,stackPos.z); pad.receiveShadow=true; scene.add(pad);
+  var BCOLORS=[0xcf6b4f,0x4f86cf,0x57b079,0xd0a24a,0x9a6bcf];
+  function blockMesh(i){ var m=new THREE.Mesh(new THREE.BoxGeometry(BH,BH,BH),new THREE.MeshStandardMaterial({color:BCOLORS[i%5],metalness:0.15,roughness:0.6})); m.castShadow=true; m.receiveShadow=true; return m; }
+  var MAX=4;
+  // source pile (decorative, always present)
+  for(var i=0;i<3;i++){ var sb=blockMesh(i+1); sb.position.set(binPos.x-0.18+0.18*i,BH/2+0.12,binPos.z+0.12-0.12*i); scene.add(sb); }
+  var stackBlocks=[]; for(i=0;i<MAX;i++){ var b=blockMesh(i); b.visible=false; b.position.set(stackPos.x,BH/2+i*BH+0.05,stackPos.z); scene.add(b); }
+  var carried=blockMesh(0); carried.visible=false; scene.add(carried);
+  var stackCount=0;
 
-  var elbowPivot=new THREE.Group(); elbowPivot.position.y=1.7; shoulderPivot.add(elbowPivot);
-  var elbowS=servo("elbow",0.62,0.62,0.7); elbowPivot.add(elbowS);
-  var fore=link(1.45,0.28); elbowPivot.add(fore);
-  var foreServo=servo("forearm_roll",0.3,0.34,0.34); foreServo.position.y=0.8; elbowPivot.add(foreServo);
+  // ---- inverse kinematics (2-link planar + waist yaw, gripper down) ----
+  function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+  function solveIK(T){ // T = world target for the GRASP point
+    var wy=T.y+GLEN;                       // wrist must sit GLEN above the grasp point (gripper points down)
+    var yaw=Math.atan2(T.x,T.z);
+    var r=Math.sqrt(T.x*T.x+T.z*T.z), dh=wy-SHY;
+    var D=clamp(Math.sqrt(r*r+dh*dh),Math.abs(L1-L2)+0.04,L1+L2-0.04);
+    var alpha=Math.atan2(dh,r);
+    var beta=Math.acos(clamp((L1*L1+D*D-L2*L2)/(2*L1*D),-1,1));
+    var gamma=Math.acos(clamp((L1*L1+L2*L2-D*D)/(2*L1*L2),-1,1));
+    var th1=alpha+beta;                    // shoulder from horizontal (elbow up)
+    var shRot=(Math.PI/2-th1);             // 0 = arm straight up
+    var elRot=(Math.PI-gamma);             // bend forward
+    var wrRot=(Math.PI - (shRot+elRot));   // keep gripper pointing straight down
+    return {yaw:yaw,sh:shRot,el:elRot,wr:wrRot};
+  }
+  var cur={yaw:0,sh:0.2,el:0.4,wr:0.3};
+  function applyIK(s,smooth){ var a=smooth==null?1:smooth;
+    cur.yaw+=(s.yaw-cur.yaw)*a; cur.sh+=(s.sh-cur.sh)*a; cur.el+=(s.el-cur.el)*a; cur.wr+=(s.wr-cur.wr)*a;
+    root.rotation.y=cur.yaw; shoulderPivot.rotation.x=cur.sh; elbowPivot.rotation.x=cur.el; wristPivot.rotation.x=cur.wr; }
 
-  var wristPivot=new THREE.Group(); wristPivot.position.y=1.45; elbowPivot.add(wristPivot);
-  var wristS=servo("wrist_angle",0.5,0.46,0.5); wristPivot.add(wristS);
-  var wristR=servo("wrist_rotate",0.34,0.34,0.34); wristR.position.y=0.36; wristPivot.add(wristR);
-  // gripper
-  var gripBase=servo("gripper",0.4,0.26,0.46); gripBase.position.y=0.6; wristPivot.add(gripBase);
-  function finger(sx){ var f=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.42,0.16),metalMat()); f.position.set(sx,0.85,0); f.castShadow=true; wristPivot.add(f); return f; }
-  var fL=finger(-0.16), fR=finger(0.16);
-
-  // object to pick (decor)
-  var obj=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4),new THREE.MeshStandardMaterial({color:0x394656,metalness:0.2,roughness:0.7}));
-  obj.position.set(2.0,0.2,0.0); obj.castShadow=true; scene.add(obj);
-
-  // ---- pose animation (radians, bending toward camera) ----
-  var POSES=[[0.15,0.5,0.25],[0.7,0.95,0.5],[0.7,0.95,0.5],[0.4,0.7,0.35],[-0.1,0.45,0.3],[-0.1,0.45,0.3],[0.15,0.5,0.25]];
-  function lerp(a,b,t){return a+(b-a)*t;}
-  function applyPose(phase,grip){ var n=POSES.length-1,x=phase*n,i=Math.min(Math.floor(x),n-1),f=x-i;
-    var ease=f<0.5?2*f*f:1-Math.pow(-2*f+2,2)/2; var A=POSES[i],B=POSES[i+1];
-    shoulderPivot.rotation.x=lerp(A[0],B[0],ease);
-    elbowPivot.rotation.x=lerp(A[1],B[1],ease);
-    wristPivot.rotation.x=lerp(A[2],B[2],ease);
-    var open=0.16+0.12*grip; fL.position.x=-open; fR.position.x=open;
+  // ---- choreography (stack the blocks) ----
+  function ph(){ var pdny=BH/2+stackCount*BH+0.05;
+    return [ {x:binPos.x,y:1.3,z:binPos.z,g:1,d:0.55},
+      {x:binPos.x,y:BH/2+0.13,z:binPos.z,g:1,d:0.5},
+      {x:binPos.x,y:BH/2+0.13,z:binPos.z,g:0,d:0.32,e:"grab"},
+      {x:binPos.x,y:1.4,z:binPos.z,g:0,d:0.5},
+      {x:stackPos.x,y:1.55,z:stackPos.z,g:0,d:0.7},
+      {x:stackPos.x,y:pdny,z:stackPos.z,g:0,d:0.5},
+      {x:stackPos.x,y:pdny,z:stackPos.z,g:1,d:0.3,e:"place"},
+      {x:stackPos.x,y:1.55,z:stackPos.z,g:1,d:0.45} ]; }
+  var plan=ph(), pi=0, ptime=0, prevT=new THREE.Vector3(binPos.x,1.3,binPos.z), grip=1, carrying=false;
+  var tmp=new THREE.Vector3();
+  function taskStep(dt){
+    var p=plan[pi]; ptime+=dt; var f=clamp(ptime/p.d,0,1); var ease=f<0.5?2*f*f:1-Math.pow(-2*f+2,2)/2;
+    tmp.set(prevT.x+(p.x-prevT.x)*ease, prevT.y+(p.y-prevT.y)*ease, prevT.z+(p.z-prevT.z)*ease);
+    applyIK(solveIK(tmp),0.35);
+    grip+=((p.g?1:0)-grip)*0.25; var open=0.10+0.10*grip; fL.position.x=-open; fR.position.x=open;
+    if(carrying){ graspAnchor.getWorldPosition(carried.position); }
+    if(f>=1){
+      if(p.e==="grab"){ carrying=true; carried.visible=true; }
+      else if(p.e==="place"){ carrying=false; carried.visible=false; if(stackCount<MAX){ stackBlocks[stackCount].visible=true; stackCount++; } }
+      prevT.set(p.x,p.y,p.z); ptime=0; pi++;
+      if(pi>=plan.length){ pi=0; if(stackCount>=MAX){ stackCount=0; stackBlocks.forEach(function(b){b.visible=false;}); } plan=ph(); }
+    }
   }
 
-  // ---- heat coloring ----
-  function applyHeat(day){
-    JOINTS.forEach(function(j){ var m=servoMeshes[j.name]; if(!m)return; var t=tempAt(j,day),c=heat(t,j.limit);
-      m.material.emissive.setRGB(c[0],c[1],c[2]); m.material.emissiveIntensity=Math.max(0.12,Math.min(0.95,(t-(j.limit-25))/25));
-      m.material.color.setRGB(0.16+c[0]*0.18,0.18+c[1]*0.12,0.21+c[2]*0.12);
-    });
-  }
+  function applyHeat(day){ JOINTS.forEach(function(j){ var m=servoMeshes[j.name]; if(!m)return; var t=tempAt(j,day),c=heat(t,j.limit);
+    m.material.emissive.setRGB(c[0],c[1],c[2]); m.material.emissiveIntensity=clamp((t-(j.limit-25))/25,0.1,0.95); }); }
 
-  // ---- camera orbit (manual) ----
-  var az=0.7, el=0.5, rad=8.2, target=new THREE.Vector3(0,1.9,0), autoRot=true;
-  function place(){ camera.position.set(target.x+rad*Math.cos(el)*Math.sin(az), target.y+rad*Math.sin(el), target.z+rad*Math.cos(el)*Math.cos(az)); camera.lookAt(target); }
+  // ---- camera orbit ----
+  var az=0.65, el=0.42, rad=8.6, target=new THREE.Vector3(0,1.7,0), autoRot=true;
+  function place(){ camera.position.set(target.x+rad*Math.cos(el)*Math.sin(az),target.y+rad*Math.sin(el),target.z+rad*Math.cos(el)*Math.cos(az)); camera.lookAt(target); }
   var dragging=false,lx=0,ly=0;
   stage.addEventListener("pointerdown",function(e){ dragging=true; autoRot=false; lx=e.clientX; ly=e.clientY; });
   window.addEventListener("pointerup",function(){ dragging=false; });
-  window.addEventListener("pointermove",function(e){
-    if(dragging){ az-=(e.clientX-lx)*0.008; el=Math.max(0.05,Math.min(1.35,el+(e.clientY-ly)*0.006)); lx=e.clientX; ly=e.clientY; place(); }
-    else { onHover(e); }
-  });
-  document.getElementById("reset").addEventListener("click",function(){ az=0.7; el=0.5; autoRot=true; place(); });
+  window.addEventListener("pointermove",function(e){ if(dragging){ az-=(e.clientX-lx)*0.008; el=clamp(el+(e.clientY-ly)*0.006,0.06,1.3); lx=e.clientX; ly=e.clientY; place(); } else onHover(e); });
+  document.getElementById("reset").addEventListener("click",function(){ az=0.65; el=0.42; autoRot=true; place(); });
 
-  // ---- hover raycast ----
   var ray=new THREE.Raycaster(), mouse=new THREE.Vector2();
   function onHover(e){ var r=canvas.getBoundingClientRect(); if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom){tip.style.opacity=0;return;}
     mouse.x=((e.clientX-r.left)/r.width)*2-1; mouse.y=-((e.clientY-r.top)/r.height)*2+1; ray.setFromCamera(mouse,camera);
-    var hits=ray.intersectObjects(Object.keys(servoMeshes).map(function(k){return servoMeshes[k];}));
-    if(hits.length){ var name=hits[0].object.userData.joint, j=JOINTS.find(function(x){return x.name===name;}), t=tempAt(j,day);
+    var ms=Object.keys(servoMeshes).map(function(k){return servoMeshes[k];}); var hits=ray.intersectObjects(ms);
+    if(hits.length){ var name=hits[0].object.userData.joint,j=JOINTS.find(function(x){return x.name===name;}),t=tempAt(j,day);
       tip.style.opacity=1; tip.style.left=e.clientX+"px"; tip.style.top=e.clientY+"px";
-      tip.innerHTML="<b>"+name+"</b> &middot; "+t.toFixed(1)+" C<br><span style='color:#8a94a4'>limit "+j.limit+" C</span>"; }
-    else tip.style.opacity=0;
-  }
+      tip.innerHTML="<b>"+name+"</b> &middot; "+t.toFixed(1)+" C<br><span style='color:#8a94a4'>limit "+j.limit+" C</span>"; } else tip.style.opacity=0; }
 
-  // ---- resize ----
   function resize(){ var w=stage.clientWidth,h=stage.clientHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
   window.addEventListener("resize",resize); resize(); place();
 
-  // ---- state + loop ----
-  var day=0, phase=0, playing=true, acc=0, lastT=0;
+  var day=0, playing=true, lastT=0;
   function setDay(d){ day=d; document.getElementById("dnum").textContent=d; document.getElementById("dnum2").textContent=d;
     document.getElementById("ddate").textContent=new Date(START.getTime()+d*86400000).toISOString().slice(0,10); applyHeat(d); }
+  var dayAcc=0;
   document.getElementById("scrub").addEventListener("input",function(){ setDay(+this.value); });
   document.getElementById("play").addEventListener("click",function(){ playing=!playing; this.textContent=playing?"Pause":"Play"; });
   function loop(ts){ if(!lastT)lastT=ts; var dt=Math.min((ts-lastT)/1000,0.05); lastT=ts;
-    if(playing){ phase=(phase+dt*0.28)%1; acc+=dt; if(acc>1.0){ acc=0; var nd=(day+1)%30; document.getElementById("scrub").value=nd; setDay(nd); } }
-    var grip=(phase>0.42&&phase<0.72)?0:1; applyPose(phase,grip);
-    if(autoRot){ az+=dt*0.18; place(); }
-    renderer.render(scene,camera); requestAnimationFrame(loop);
-  }
+    if(playing){ taskStep(dt); dayAcc+=dt; if(dayAcc>1.1){ dayAcc=0; var nd=(day+1)%30; document.getElementById("scrub").value=nd; setDay(nd); } }
+    if(autoRot){ az+=dt*0.14; place(); }
+    renderer.render(scene,camera); requestAnimationFrame(loop); }
   setDay(0); requestAnimationFrame(loop);
 })();
 </script>
