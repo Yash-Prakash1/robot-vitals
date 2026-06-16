@@ -55,7 +55,7 @@ def test_watch_threshold_suppresses_cusum_only_drift():
 def test_thermal_ramp_is_caught_before_the_cap():
     series = [59.0 + _ripple(d) + max(0, d - 10) * 1.2 for d in range(30)]
     r = analyze_thermal(series, noise_sigma=0.4, limit_c=XM)
-    assert r["status"] == "alarm"
+    assert r["status"] == "quarantine"
     assert r["cusum_detected_day"] < r["cap_cross_day"]
 
 
@@ -63,13 +63,13 @@ def test_thermal_ramp_uses_the_joint_limit():
     # the same temperatures reach the cap sooner against the lower XL430 limit
     series = [51.0 + _ripple(d) + max(0, d - 10) * 1.2 for d in range(30)]
     xl = analyze_thermal(series, noise_sigma=0.4, limit_c=XL)
-    assert xl["status"] == "alarm"               # crosses its 72 C-anchored cap
+    assert xl["status"] == "quarantine"               # crosses its 72 C-anchored cap
 
 
 def test_effort_ramp_is_caught_before_the_cap():
     series = [0.30 + (0.005 if d % 2 == 0 else -0.005) + max(0, d - 10) * 0.005 for d in range(30)]
     r = analyze_effort(series, noise_sigma=0.008)
-    assert r["status"] == "alarm"
+    assert r["status"] == "quarantine"
     assert r["cusum_detected_day"] < r["cap_cross_day"]
 
 
@@ -85,5 +85,11 @@ def test_canonical_fleet_flags_only_the_two_planted_joints():
     keys = sorted((f[0], f[1], f[2]) for f in flags)
     assert keys == [("wx-03", "elbow", "thermal"), ("wx-06", "shoulder", "effort")]
     for rid, joint, chan, ch in flags:
-        assert ch["status"] == "alarm"
+        assert ch["status"] == "quarantine"
         assert ch["cusum_detected_day"] < ch["cap_cross_day"]   # detected before the cap
+
+    # lock the load-bearing demo numbers for wx-03's elbow: the lead-time story
+    sb = res["wx-03"]["joints"]["elbow"]["thermal"]["status_by_day"]
+    assert sb.index("drifting") == 12        # maintenance called day 12
+    assert sb.index("quarantine") == 27      # quarantine (mean reaches the 72 C data-at-risk line) day 27
+    assert all(s in ("drifting", "quarantine") for s in sb[12:])  # contiguous progression, no gaps or oscillation

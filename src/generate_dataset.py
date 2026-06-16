@@ -25,17 +25,18 @@ from datetime import timedelta
 
 from config import (
     BASELINE_DAYS,
+    CORRUPTION_OFFSET_C,
     CUSUM_H_SIGMA,
     CUSUM_K_SIGMA,
+    DATA_AT_RISK_OFFSET_C,
+    DRIFT_WATCH_SCORE,
     EFFORT_ACTION_CAP_PCT,
     EFFORT_ACTION_CAP_SCORE,
     HEALTHY_BAND_C,
     JOINT_LIMIT_C,
     JOINTS,
     MODEL_TEMPERATURE_LIMIT_C,
-    QUARANTINE_OFFSET_C,
     THERMAL_ACTION_CAP_SCORE,
-    WARN_OFFSET_C,
 )
 from config import CONFIG as CONFIG_RAW
 from config import START_DATE
@@ -57,7 +58,7 @@ def build_dataset(seed=CANONICAL_SEED, days=30):
     dates = [(START_DATE + timedelta(days=d)).isoformat() for d in range(days)]
     maintenance = analyze_fleet(fleet["arms"], joints, days)
 
-    verdict_counts = {"PASS": 0, "WARN": 0, "QUARANTINE": 0}
+    verdict_counts = {"COLLECT": 0, "REST": 0}
     robots = []
     for arm in fleet["arms"]:
         robot_id = arm["robot_id"]
@@ -79,6 +80,7 @@ def build_dataset(seed=CANONICAL_SEED, days=30):
                 "gate_score": round(report.gate_score, 1),
                 "verdict": report.verdict.value,
                 "weakest_joint": report.weakest_joint,
+                "rested": r["rested"],
             })
 
         joint_maint = maintenance[robot_id]["joints"]
@@ -94,6 +96,7 @@ def build_dataset(seed=CANONICAL_SEED, days=30):
             "robot_id": robot_id,
             "profile": arm["profile"],
             "runs": runs_out,
+            "daily_rests": arm["daily_rests"],   # the throughput cost: rests inserted per day
             "maintenance": joint_maint,
             "flags": flags,
         })
@@ -119,10 +122,11 @@ def build_dataset(seed=CANONICAL_SEED, days=30):
             "verdict_counts": verdict_counts,
             "thresholds": {
                 "servo_temp_limit_c": dict(MODEL_TEMPERATURE_LIMIT_C),  # sourced (datasheet)
-                "healthy_band_c": HEALTHY_BAND_C,              # illustrative
-                "warn_offset_c": WARN_OFFSET_C,                # illustrative
-                "quarantine_offset_c": QUARANTINE_OFFSET_C,    # illustrative
-                "thermal_action_cap_score": THERMAL_ACTION_CAP_SCORE,  # illustrative
+                "healthy_band_c": HEALTHY_BAND_C,                  # illustrative
+                "data_at_risk_offset_c": DATA_AT_RISK_OFFSET_C,    # illustrative (rest line, 72 C)
+                "corruption_offset_c": CORRUPTION_OFFSET_C,        # illustrative (74 C)
+                "thermal_action_cap_score": THERMAL_ACTION_CAP_SCORE,  # illustrative (the 72 C data-at-risk line as a score)
+                "drift_watch_score": DRIFT_WATCH_SCORE,                # illustrative (the maintenance-called watch level)
                 "effort_action_cap_score": EFFORT_ACTION_CAP_SCORE,    # illustrative
                 "effort_action_cap_pct": EFFORT_ACTION_CAP_PCT,        # illustrative
                 "cusum_k_sigma": CUSUM_K_SIGMA,
@@ -173,8 +177,8 @@ def main():
         for flag in robot["flags"]:
             print(
                 f"  {robot['robot_id']} ({robot['profile']}): {flag['joint']} {flag['channel']} "
-                f"= {flag['status']} (drift detected day {flag['detected_day']}, "
-                f"cap crossed day {flag['cap_cross_day']})"
+                f"= {flag['status']} (maintenance called day {flag['detected_day']}, "
+                f"quarantine day {flag['cap_cross_day']})"
             )
 
 

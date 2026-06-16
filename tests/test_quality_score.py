@@ -1,7 +1,7 @@
 """Tests for the per-run thermal gate, now per joint with per-joint limits.
 
 Covers the honest scoring curve against each joint's own limit (and the specific
-bug it fixes), the three-tier verdict, weakest-link aggregation across joints,
+bug it fixes), the collect/rest verdict, weakest-link aggregation across joints,
 and the episode stamp.
 """
 import json
@@ -41,21 +41,22 @@ def test_the_flagged_bug_is_fixed():
     assert thermal_headroom_score(61.0, XM) >= 90.0
 
 
-def test_verdict_tiers_scale_with_the_limit():
-    assert thermal_verdict(66.0, XM) is Verdict.PASS         # 80 - 14
-    assert thermal_verdict(67.0, XM) is Verdict.WARN
-    assert thermal_verdict(74.0, XM) is Verdict.WARN         # 80 - 6
-    assert thermal_verdict(75.0, XM) is Verdict.QUARANTINE
-    # the XL430 joint trips earlier, against its lower 72 C limit
-    assert thermal_verdict(58.0, XL) is Verdict.PASS         # 72 - 14
-    assert thermal_verdict(59.0, XL) is Verdict.WARN
-    assert thermal_verdict(66.0, XL) is Verdict.WARN         # 72 - 6
-    assert thermal_verdict(67.0, XL) is Verdict.QUARANTINE
+def test_verdict_collect_or_rest_scales_with_the_limit():
+    # collect below the data-at-risk line (limit - 8), rest at or above it
+    assert thermal_verdict(71.0, XM) is Verdict.COLLECT      # below 72
+    assert thermal_verdict(72.0, XM) is Verdict.REST         # 80 - 8, the rest line
+    assert thermal_verdict(76.0, XM) is Verdict.REST
+    # the XL430 joint rests earlier, against its lower 72 C limit (line at 64)
+    assert thermal_verdict(63.0, XL) is Verdict.COLLECT      # below 64
+    assert thermal_verdict(64.0, XL) is Verdict.REST         # 72 - 8
+    # the boundary is strict (collect strictly below the line); lock it tightly
+    assert thermal_verdict(71.999, XM) is Verdict.COLLECT
+    assert thermal_verdict(63.999, XL) is Verdict.COLLECT
 
 
 def test_worst_verdict_is_weakest_link():
-    assert worst_verdict([Verdict.PASS, Verdict.WARN, Verdict.PASS]) is Verdict.WARN
-    assert worst_verdict([Verdict.PASS, Verdict.QUARANTINE]) is Verdict.QUARANTINE
+    assert worst_verdict([Verdict.COLLECT, Verdict.REST, Verdict.COLLECT]) is Verdict.REST
+    assert worst_verdict([Verdict.COLLECT, Verdict.COLLECT]) is Verdict.COLLECT
 
 
 def _limits(temps):
@@ -68,24 +69,24 @@ def test_gate_is_the_weakest_joint():
     report = evaluate_run("wx-01", "wx-01-d00-r0", "2026-05-15T09:00:00", temps, _limits(temps))
     assert report.weakest_joint == "elbow"
     assert report.gate_score == thermal_headroom_score(74.0, XM)   # 30.0
-    assert report.verdict is Verdict.WARN
+    assert report.verdict is Verdict.REST
     # the cool joints stay at full marks; the gate is the minimum, not the mean
     assert report.health_average > report.gate_score
 
 
 def test_xl430_joint_can_set_the_gate_against_its_lower_limit():
-    # a gripper at 67 C is fine for an 80 C limit but QUARANTINE for its 72 C limit
+    # a gripper at 67 C is fine for an 80 C limit but past the rest line for its 72 C limit
     temps = {"elbow": 60.0, "gripper": 67.0}
     report = evaluate_run("wx-01", "r", "2026-05-15T09:00:00", temps, _limits(temps))
     assert report.weakest_joint == "gripper"
-    assert report.verdict is Verdict.QUARANTINE
+    assert report.verdict is Verdict.REST
 
 
-def test_all_healthy_passes():
+def test_all_healthy_collects():
     temps = {"waist": 50.0, "elbow": 58.0, "gripper": 40.0}
     report = evaluate_run("wx-01", "r", "2026-05-15T09:00:00", temps, _limits(temps))
     assert report.gate_score == 100.0
-    assert report.verdict is Verdict.PASS
+    assert report.verdict is Verdict.COLLECT
 
 
 def test_stamp_is_complete_and_json_serializable():
@@ -98,7 +99,7 @@ def test_stamp_is_complete_and_json_serializable():
     assert stamp["weakest_joint"] == "elbow"
     rt = json.loads(json.dumps(stamp))
     assert rt["joints"]["elbow"]["temp_c"] == 72.0
-    assert rt["joints"]["elbow"]["verdict"] == "WARN"
+    assert rt["joints"]["elbow"]["verdict"] == "REST"
 
 
 def test_empty_temps_rejected():

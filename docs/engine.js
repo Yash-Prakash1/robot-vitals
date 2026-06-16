@@ -1,5 +1,8 @@
-// In-browser port of the robot-vitals core, so the static dashboard can generate
-// a fresh fleet client-side (GitHub Pages cannot run Python).
+// In-browser port of the robot-vitals core, so the demos can generate a fresh
+// fleet client-side (GitHub Pages cannot run Python). The RNG (mulberry32) is
+// deliberately not Python's, so an in-browser fleet is a fresh random realization,
+// not a byte-for-byte copy of the baked reference (docs/data.js). The fixed scenes
+// read data.js for the canonical numbers; this engine drives reroll and the sandbox.
 //
 // Single source of truth: this engine reads every constant and the fleet config
 // from window.RV_CONFIG, which docs/config.js sets from config.json (the same
@@ -48,8 +51,8 @@
   var FLEET = SIM.fleet;
 
   var HEALTHY_BAND_C = CFG.gate.healthy_band_c;
-  var WARN_OFFSET_C = CFG.gate.warn_offset_c;
-  var QUARANTINE_OFFSET_C = CFG.gate.quarantine_offset_c;
+  var DATA_AT_RISK_OFFSET_C = CFG.gate.data_at_risk_offset_c;   // rest line = limit - offset (and the trend's quarantine line)
+  var CORRUPTION_OFFSET_C = CFG.gate.corruption_offset_c;       // corruption = limit - offset; resting keeps collected runs below it
   var DEFAULT_LIMIT = LIMIT["XM430-W350"];
 
   var BASELINE_DAYS = CFG.cusum.baseline_days;
@@ -72,13 +75,12 @@
   }
   function thermalVerdict(t, limit) {
     limit = limit || DEFAULT_LIMIT;
-    if (t <= limit - WARN_OFFSET_C) return "PASS";
-    if (t <= limit - QUARANTINE_OFFSET_C) return "WARN";
-    return "QUARANTINE";
+    // collect below the data-at-risk line, otherwise rest the actuator before recording
+    return (t < limit - DATA_AT_RISK_OFFSET_C) ? "COLLECT" : "REST";
   }
-  var SEVERITY = { PASS: 0, WARN: 1, QUARANTINE: 2 };
+  var SEVERITY = { COLLECT: 0, REST: 1 };
   function evaluateRun(temps, limits) {
-    var per = {}, weakest = null, weakestScore = Infinity, worst = "PASS";
+    var per = {}, weakest = null, weakestScore = Infinity, worst = "COLLECT";
     JOINT_NAMES.forEach(function (j) {
       if (!(j in temps)) return;
       var limit = limits[j];
@@ -129,10 +131,12 @@
     var scores = series.map(function (x) { return scoreFn(x, m); });
     var capCross = null;
     for (var i = 0; i < scores.length; i++) { if (scores[i] <= capScore) { capCross = i; break; } }
-    var statusByDay = scores.map(function (sc, idx) {
-      if (sc <= capScore) return "alarm";
-      if (firstHigh != null && idx >= firstHigh && sc <= DRIFT_WATCH_SCORE) return "drifting";
-      return "stable";
+    var statusByDay = [], quarantined = false;
+    scores.forEach(function (sc, idx) {
+      if (sc <= capScore) quarantined = true;            // latched: once pulled, it stays pulled
+      if (quarantined) statusByDay.push("quarantine");
+      else if (firstHigh != null && idx >= firstHigh && sc <= DRIFT_WATCH_SCORE) statusByDay.push("drifting");
+      else statusByDay.push("stable");
     });
     return {
       channel: channel, provenance: provenance,
@@ -154,9 +158,16 @@
   }
 
   // ---- simulator (mirror src/simulator.py) ----
-  function creep(cfg, joint, day) {
-    if (cfg.profile !== "thermal-creep" || joint !== cfg.creep_joint || day < cfg.creep_onset_day) return 0.0;
-    return (day - cfg.creep_onset_day) * cfg.creep_rate_c_per_day;
+  // the gate rests an actuator at this temperature so a run never reaches corruption
+  var REST_LINE = {};
+  JOINT_NAMES.forEach(function (j) { REST_LINE[j] = JOINT_LIMIT_C[j] - DATA_AT_RISK_OFFSET_C; });
+  // heat added per run of use; the thermal-fault joint heats faster as it degrades
+  function warmupOf(cfg, joint, day) {
+    var base = INTRA_DAY_WARMUP_C;
+    if (cfg.profile === "thermal-creep" && joint === cfg.creep_joint && day >= cfg.creep_onset_day) {
+      base += (day - cfg.creep_onset_day) * cfg.fault_heat_c_per_day;
+    }
+    return base;
   }
   function effortRise(cfg, joint, day) {
     if (cfg.profile !== "effort-rise" || joint !== cfg.effort_joint || day < cfg.effort_onset_day) return 0.0;
@@ -168,27 +179,41 @@
     return 0.0;
   }
   function simArm(cfg, rng, days) {
-    var runs = [], dailyTemp = [], dailyCurrent = [];
+    var runs = [], dailyTemp = [], dailyCurrent = [], dailyRests = [];
     for (var day = 0; day < days; day++) {
-      var dayRuns = [];
+      var warmup = {}, temp = {};
+      JOINT_NAMES.forEach(function (j) { warmup[j] = warmupOf(cfg, j, day); temp[j] = BASE_TEMP_C[j]; });
+      var rests = 0, dayRuns = [];
       for (var ri = 0; ri < RUNS_PER_DAY; ri++) {
+        // the gate: if continuing would push any joint into its data-at-risk band, rest
+        // (cool all joints to baseline) so the run is never recorded too hot
+        var rested = JOINT_NAMES.some(function (j) { return temp[j] + warmup[j] >= REST_LINE[j]; });
+        if (rested) { JOINT_NAMES.forEach(function (j) { temp[j] = BASE_TEMP_C[j]; }); rests += 1; }
         var temps = {};
         JOINT_NAMES.forEach(function (j) {
-          temps[j] = BASE_TEMP_C[j] + creep(cfg, j, day) + ri * INTRA_DAY_WARMUP_C
-            + acuteSpike(cfg, j, day, ri) + gauss(rng, 0, RUN_NOISE_SIGMA_C);
+          temp[j] += warmup[j];   // the actuator heats during the run
+          temps[j] = temp[j] + acuteSpike(cfg, j, day, ri) + gauss(rng, 0, RUN_NOISE_SIGMA_C);
         });
         dayRuns.push(temps);
-        runs.push({ day: day, run_index: ri, temps: temps });
+        runs.push({ day: day, run_index: ri, temps: temps, rested: rested });
       }
-      var n = dayRuns.length, tmean = {}, cur = {};
-      JOINT_NAMES.forEach(function (j) {
-        tmean[j] = dayRuns.reduce(function (s, r) { return s + r[j]; }, 0) / n;
-        cur[j] = Math.max(0.0, BASE_CURRENT_A[j] + effortRise(cfg, j, day) + gauss(rng, 0, CURRENT_NOISE_SIGMA_A));
-      });
-      dailyTemp.push(tmean); dailyCurrent.push(cur);
+      var n = dayRuns.length, tmean = {};
+      JOINT_NAMES.forEach(function (j) { tmean[j] = dayRuns.reduce(function (s, r) { return s + r[j]; }, 0) / n; });
+      dailyTemp.push(tmean); dailyRests.push(rests);
+      // the effort channel reads the current once per run and takes the daily mean,
+      // in step with the temperature channel (a single daily sample is too noisy)
+      var curSamples = [];
+      for (var s = 0; s < RUNS_PER_DAY; s++) {
+        var cs = {};
+        JOINT_NAMES.forEach(function (j) { cs[j] = BASE_CURRENT_A[j] + effortRise(cfg, j, day) + gauss(rng, 0, CURRENT_NOISE_SIGMA_A); });
+        curSamples.push(cs);
+      }
+      var cur = {};
+      JOINT_NAMES.forEach(function (j) { cur[j] = Math.max(0.0, curSamples.reduce(function (a, c) { return a + c[j]; }, 0) / RUNS_PER_DAY); });
+      dailyCurrent.push(cur);
     }
     return { robot_id: cfg.robot_id, profile: cfg.profile, runs: runs,
-      daily_temp_c: dailyTemp, daily_current_a: dailyCurrent };
+      daily_temp_c: dailyTemp, daily_rests: dailyRests, daily_current_a: dailyCurrent };
   }
   function simulateFleet(seed, days) {
     days = days || 30;
@@ -230,7 +255,7 @@
     var joints = fleet.joints;
     var dates = range(days).map(function (d) { return addDays(START_DATE, d); });
     var maint = analyzeFleet(fleet.arms, joints, days);
-    var counts = { PASS: 0, WARN: 0, QUARANTINE: 0 };
+    var counts = { COLLECT: 0, REST: 0 };
 
     var robots = fleet.arms.map(function (arm) {
       var runsOut = arm.runs.map(function (r) {
@@ -244,7 +269,7 @@
           day: r.day, run_index: r.run_index, date: dates[r.day],
           timestamp: dates[r.day] + "T" + pad2(hour) + ":00:00",
           temps_c: temps_c, gate_score: round1(rep.gate_score),
-          verdict: rep.verdict, weakest_joint: rep.weakest_joint,
+          verdict: rep.verdict, weakest_joint: rep.weakest_joint, rested: r.rested,
         };
       });
       var jm = maint[arm.robot_id].joints, flags = [];
@@ -256,7 +281,8 @@
           }
         });
       });
-      return { robot_id: arm.robot_id, profile: arm.profile, runs: runsOut, maintenance: jm, flags: flags };
+      return { robot_id: arm.robot_id, profile: arm.profile, runs: runsOut,
+        daily_rests: arm.daily_rests, maintenance: jm, flags: flags };
     });
 
     var jointDefs = JOINTS.map(function (j) {
@@ -269,10 +295,11 @@
         start_date: dates[0], end_date: dates[days - 1], dates: dates, joints: jointDefs,
         verdict_counts: counts,
         thresholds: {
-          servo_temp_limit_c: LIMIT, healthy_band_c: HEALTHY_BAND_C, warn_offset_c: WARN_OFFSET_C,
-          quarantine_offset_c: QUARANTINE_OFFSET_C, thermal_action_cap_score: THERMAL_ACTION_CAP_SCORE,
-          effort_action_cap_score: EFFORT_ACTION_CAP_SCORE, effort_action_cap_pct: EFFORT_ACTION_CAP_PCT,
-          cusum_k_sigma: CUSUM_K_SIGMA, cusum_h_sigma: CUSUM_H_SIGMA, baseline_days: BASELINE_DAYS,
+          servo_temp_limit_c: LIMIT, healthy_band_c: HEALTHY_BAND_C, data_at_risk_offset_c: DATA_AT_RISK_OFFSET_C,
+          corruption_offset_c: CORRUPTION_OFFSET_C, thermal_action_cap_score: THERMAL_ACTION_CAP_SCORE,
+          drift_watch_score: DRIFT_WATCH_SCORE, effort_action_cap_score: EFFORT_ACTION_CAP_SCORE,
+          effort_action_cap_pct: EFFORT_ACTION_CAP_PCT, cusum_k_sigma: CUSUM_K_SIGMA,
+          cusum_h_sigma: CUSUM_H_SIGMA, baseline_days: BASELINE_DAYS,
         },
       },
       robots: robots,

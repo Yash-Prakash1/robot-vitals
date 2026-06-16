@@ -35,12 +35,12 @@ Robot-AI labs train foundation models on real robots, so the robot is the measur
 flowchart LR
   R["Servo registers<br/>(temperature, current)"] --> G{"Per-run gate<br/>before every run"}
   R --> M{"Daily trend<br/>(CUSUM detector)"}
-  G -->|healthy| C["Collect the data"]
-  G -->|too hot| P["Pull the robot"]
-  M -->|slow drift| W["Call maintenance,<br/>days early"]
+  G -->|cool enough| C["Collect the run"]
+  G -->|too hot| P["Rest, then collect<br/>(no bad data)"]
+  M -->|heating faster| W["Call maintenance days early,<br/>then quarantine the joint"]
   style C fill:#1f9d57,color:#fff,stroke:#1f9d57
-  style P fill:#d23f3f,color:#fff,stroke:#d23f3f
-  style W fill:#c98300,color:#fff,stroke:#c98300
+  style P fill:#c98300,color:#fff,stroke:#c98300
+  style W fill:#d23f3f,color:#fff,stroke:#d23f3f
 ```
 
 Same sensors, two timescales: block a bad run now, and catch the slow decline before it ever fails one.
@@ -52,11 +52,11 @@ Open the live demo: **https://yash-prakash1.github.io/robot-vitals/**
 It is a guided tour that walks through the whole idea, scene by scene:
 
 - **The cold open.** A motor slowly overheats while the AI eval score slides, and the policy gets blamed for a hardware fault. Documented, not hypothetical.
-- **Watch one arm for 30 days.** A 3D WidowX arm stacks blocks while its servos glow by temperature. Scrub the month and watch two checks read the same sensors: a fast pre-flight gate before every run, and a patient daily trend. The trend notices the creep days before the gate does.
+- **Watch one arm for 30 days.** A 3D WidowX arm stacks blocks while its servos glow by temperature. Scrub the month: a fast pre-flight gate rests the actuator to keep every run's data clean, while a patient daily trend catches the motor heating faster and faster, the part rest cannot cure, and calls maintenance about two weeks before the joint must be pulled.
 - **Make the call.** A run is queued, the arm passed its quick check, the trend already flagged it. Collect or pull? The reveal shows what each check knew, with the day numbers computed live.
 - **The audit.** Run ten candidate faults through two filters (can the closed-loop policy compensate, and does it actually recur), and watch the list collapse to one proven fault plus one labeled candidate.
-- **Break an arm yourself.** Pick a joint, a drift speed, and a start day. The gate keeps passing while the trend catches your fault, and the tool reports the lead time without inventing a failure date.
-- **The whole fleet.** Eight arms, three with a planted fault: a slow thermal creep, an effort rise only the current channel sees, and an acute spike only the per-run gate catches. Click any arm to load its story.
+- **Break an arm yourself.** Pick a joint, a drift speed, and a start day. The gate keeps collecting clean data (resting when it must) while the trend catches your fault, and the tool reports the lead time without inventing a failure date.
+- **The whole fleet.** Eight arms, three with a planted fault: a motor that heats faster, an effort rise only the current channel sees, and an acute spike only the per-run gate catches. Click any arm to load its story.
 
 Press **New simulation** in the fleet view to roll a fresh fleet in your browser, or open the dense **[engineer's grid view](https://yash-prakash1.github.io/robot-vitals/dashboard.html)** for the per-run, per-joint dashboard. The data is synthetic; the scoring, drift detection, and gate are the real logic, running live.
 
@@ -134,12 +134,12 @@ The hard part was deciding what not to build, and being honest about what I do a
 
 **One signal, two timescales,** from the same registers (DYNAMIXEL Present Temperature and Present Current, already on the serial bus).
 
-**Per-run gate (data-integrity).** Before every test run, it reads all seven joints and scores each one's headroom to its own limit; the gate is the weakest joint.
+**Per-run gate (data-integrity).** Before every test run, it reads all seven joints and scores each one's headroom to its own limit; the gate is the weakest joint. Heat from use is normal and recoverable.
 - Score: percent of usable headroom, flat at 100 in the healthy range, 0 at the limit.
-- Verdict: PASS (collect), WARN (collect but flag for downweighting), QUARANTINE (pull the robot).
+- Verdict: COLLECT below the data-at-risk line (limit minus 8 C), or REST (too hot, rest it) at or above it. Resting cools the actuator so the run is collected clean, never above the corruption line (limit minus 6 C). A sudden transient that reads hot is flagged REST and rejected, not collected.
 - Every run is stamped with the per-joint breakdown, so each episode carries its robot's health context.
 
-**Predictive-maintenance layer (longitudinal).** End of day, a CUSUM drift detector per joint on two channels (thermal and effort). Each reports a trend, a status (stable / drifting / alarm), and an action threshold as a degradation magnitude, never a date.
+**Predictive-maintenance layer (longitudinal).** End of day, a CUSUM drift detector per joint on two channels (thermal and effort), on the daily mean. A faster-heating motor runs hotter on average even with resting, so the mean carries the drift. Each channel reports a trend, a status (stable / drifting / quarantine), and an action threshold as a degradation magnitude, never a date. The cost of the drift is visible as rests per day: the time the robot spends cooling instead of collecting, climbing until the joint reaches quarantine and must be pulled.
 
 <details>
 <summary><b>The math, for the curious (click to expand)</b></summary>
@@ -162,7 +162,7 @@ The protocol layer never touches a specific SDK, so other platforms plug in via 
 robot-vitals/
   config.json           single source of truth for constants and the fleet config
   src/
-    quality_score.py    per-run gate: headroom curve, three-tier verdict, stamp
+    quality_score.py    per-run gate: headroom curve, collect/rest verdict, stamp
     maintenance.py      longitudinal CUSUM on the temperature and effort channels
     cusum.py            two-sided CUSUM, sigma-relative, detection not forecasting
     wilson.py           Wilson score intervals, honest at small samples
@@ -190,7 +190,7 @@ open docs/index.html              # the guided demo (or dashboard.html for the g
 
 - **Thermal rests on evidence; effort rests on principle.** The effort cap is illustrative, and the code says so.
 - **One fault deeply done, not a broad suite.** That is disciplined scoping, not thinness.
-- **CUSUM has a finite false-positive rate, handled by design.** The two-condition flag (a detection AND a real score drop) suppresses noise trips, and the serious "pull" state additionally needs the action cap, which a healthy joint never crosses.
+- **CUSUM has a finite false-positive rate, handled by design.** The two-condition flag (a detection AND a real score drop past the watch level) suppresses noise trips, and the serious quarantine state additionally needs the daily mean to reach the data-at-risk line, which a healthy joint never does.
 - **Every threshold except the servo datasheet limits is illustrative,** labeled as such in the code, the dashboard, and here. The constants live in one file, `config.json`.
 
 ## References

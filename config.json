@@ -1,9 +1,9 @@
 {
-  "_comment": "Single source of truth for every tunable constant and the fleet config. Read by the Python core via src/config.py, and emitted to docs/config.js by src/generate_dataset.py so the browser engine (docs/engine.js) reads identical values. Thresholds are illustrative pending fleet validation, except the servo datasheet limits (80 C for XM430-W350, 72 C for XL430-W250).",
+  "_comment": "Single source of truth for every tunable constant and the fleet config. Read by the Python core via src/config.py, and emitted to docs/config.js by src/generate_dataset.py so the browser engine (docs/engine.js) reads identical values. Thresholds are illustrative pending fleet validation, except the servo datasheet limits (80 C for XM430-W350, 72 C for XL430-W250). Heat ladder per joint: collect below (limit - data_at_risk_offset); at that line the gate rests the actuator to cool it; (limit - corruption_offset) is where data would corrupt, which resting prevents.",
   "gate": {
     "healthy_band_c": 20.0,
-    "warn_offset_c": 14.0,
-    "quarantine_offset_c": 6.0
+    "data_at_risk_offset_c": 8.0,
+    "corruption_offset_c": 6.0
   },
   "servo_temperature_limit_c": {
     "XM430-W350": 80.0,
@@ -15,8 +15,8 @@
     "h_sigma": 5.0
   },
   "maintenance": {
-    "thermal_action_cap_score": 70.0,
-    "drift_watch_score": 90.0,
+    "thermal_action_cap_score": 40.0,
+    "drift_watch_score": 80.0,
     "effort_zero_scale_pct": 0.5,
     "effort_action_cap_pct": 0.25
   },
@@ -56,7 +56,7 @@
     "fleet": [
       {"robot_id": "wx-01", "profile": "healthy"},
       {"robot_id": "wx-02", "profile": "healthy"},
-      {"robot_id": "wx-03", "profile": "thermal-creep", "creep_joint": "elbow", "creep_onset_day": 10, "creep_rate_c_per_day": 0.6},
+      {"robot_id": "wx-03", "profile": "thermal-creep", "creep_joint": "elbow", "creep_onset_day": 10, "fault_heat_c_per_day": 0.75},
       {"robot_id": "wx-04", "profile": "healthy"},
       {"robot_id": "wx-05", "profile": "healthy"},
       {"robot_id": "wx-06", "profile": "effort-rise", "effort_joint": "shoulder", "effort_onset_day": 10, "effort_rate_a_per_day": 0.007},

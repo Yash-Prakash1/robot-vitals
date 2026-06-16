@@ -5,33 +5,42 @@ datasheet limit (XM430-W350 to 80 C, XL430-W250 to 72 C), and takes the weakest
 joint as the run's gate score. Score, verdict, and the per-joint breakdown become
 the metadata stamped onto every episode the run records.
 
+The verdict is the action, not a damage report: COLLECT when the joint is cool
+enough to record trustworthy motion, and REST ("too hot, rest it") when it has
+reached its data-at-risk line and the actuator should cool before collecting.
+Resting is recoverable; heat from use is normal. The gate never COLLECTS a run at
+or above the corruption line: gradual heat is rested away before it gets there, and
+a sudden transient that does read hot is flagged REST (rejected), not collected.
+The lasting "the robot is not working properly" judgement belongs to the daily
+trend (maintenance), not to one hot run.
+
 Scoring is percent of usable headroom: 100 up to (limit minus the healthy band),
 then linear to 0 at the limit. A joint at 61 C on an 80 C limit scores 95. Only
-the datasheet limits are sourced; the band and verdict offsets are illustrative
-and live in config.json.
+the datasheet limits are sourced; the band and offsets are illustrative and live
+in config.json.
 """
 
 from enum import Enum
 
-from config import HEALTHY_BAND_C, QUARANTINE_OFFSET_C, SERVO_TEMPERATURE_LIMIT_C, WARN_OFFSET_C
+from config import DATA_AT_RISK_OFFSET_C, HEALTHY_BAND_C, SERVO_TEMPERATURE_LIMIT_C
 
 
 class Verdict(Enum):
-    """Three tiers. WARN maps onto PI's practice of tagging data for downweighting."""
+    """The per-run action. There is no "quarantine" here: a single hot run means
+    rest, not pull. Pulling the robot is the maintenance layer's call."""
 
-    PASS = "PASS"              # collect
-    WARN = "WARN"             # collect, but flag episodes for downweighting
-    QUARANTINE = "QUARANTINE"  # do not collect, pull the robot
+    COLLECT = "COLLECT"  # cool enough, record the run
+    REST = "REST"        # too hot, rest the actuator and retry (no bad data collected)
 
     @property
     def severity(self):
-        return {"PASS": 0, "WARN": 1, "QUARANTINE": 2}[self.value]
+        return {"COLLECT": 0, "REST": 1}[self.value]
 
 
 def thermal_headroom_score(temperature_c, limit_c=SERVO_TEMPERATURE_LIMIT_C):
     """Percent of usable headroom to a joint's limit, in [0, 100]. Piecewise-linear
     because we have ground truth only at the healthy end and the limit; the danger
-    near the limit is carried by the QUARANTINE step, not by bending the curve."""
+    near the limit is carried by the REST step, not by bending the curve."""
     ceiling = limit_c - HEALTHY_BAND_C
     if temperature_c <= ceiling:
         return 100.0
@@ -41,13 +50,11 @@ def thermal_headroom_score(temperature_c, limit_c=SERVO_TEMPERATURE_LIMIT_C):
 
 
 def thermal_verdict(temperature_c, limit_c=SERVO_TEMPERATURE_LIMIT_C):
-    """The operational decision for one joint, with a margin below its limit. The
-    score reports headroom; this carries the action."""
-    if temperature_c <= limit_c - WARN_OFFSET_C:
-        return Verdict.PASS
-    if temperature_c <= limit_c - QUARANTINE_OFFSET_C:
-        return Verdict.WARN
-    return Verdict.QUARANTINE
+    """The operational decision for one joint: collect if it is below its
+    data-at-risk line, otherwise rest the actuator before recording."""
+    if temperature_c < limit_c - DATA_AT_RISK_OFFSET_C:
+        return Verdict.COLLECT
+    return Verdict.REST
 
 
 def worst_verdict(verdicts):
@@ -84,8 +91,9 @@ class RunReport:
             },
             "note": (
                 "Score is percent thermal headroom to each joint's datasheet limit "
-                "(80 C XM430, 72 C XL430). The gate is the weakest joint. Verdict "
-                "offsets are illustrative pending fleet validation."
+                "(80 C XM430, 72 C XL430). The gate is the weakest joint. COLLECT "
+                "below the data-at-risk line, REST at or above it. Offsets are "
+                "illustrative pending fleet validation."
             ),
         }
 

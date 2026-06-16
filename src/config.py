@@ -15,10 +15,13 @@ _PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 with open(_PATH) as _f:
     CONFIG = json.load(_f)
 
-# gate: scoring and verdict offsets, applied relative to each joint's own limit
-HEALTHY_BAND_C = CONFIG["gate"]["healthy_band_c"]          # healthy ceiling = limit - band
-WARN_OFFSET_C = CONFIG["gate"]["warn_offset_c"]            # warn onset = limit - offset
-QUARANTINE_OFFSET_C = CONFIG["gate"]["quarantine_offset_c"]  # quarantine onset = limit - offset
+# gate: heat ladder, applied relative to each joint's own limit
+HEALTHY_BAND_C = CONFIG["gate"]["healthy_band_c"]              # headroom score: 100 at limit - band, 0 at limit
+DATA_AT_RISK_OFFSET_C = CONFIG["gate"]["data_at_risk_offset_c"]  # rest line = limit - offset (and the trend's QUARANTINE line)
+# corruption = limit - offset. Documentation/display only on the Python side: nothing
+# compares against it, because resting (at the data-at-risk line, 2 C below) is what
+# keeps collected runs under it. The browser/UI use it to draw the corruption line.
+CORRUPTION_OFFSET_C = CONFIG["gate"]["corruption_offset_c"]
 
 # servo temperature limits (the XM430 ceiling is the default / binding limit)
 MODEL_TEMPERATURE_LIMIT_C = dict(CONFIG["servo_temperature_limit_c"])

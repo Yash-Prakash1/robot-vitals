@@ -46,13 +46,17 @@ def pooled_sigma(groups):
 
 
 def _status_series(scores, cap_score, watch_score, alarm_day):
-    """Per-day status. alarm: degraded past the action cap. drifting: CUSUM
+    """Per-day status. quarantine: degraded into the data-at-risk band (the joint
+    is no longer working properly, pull it for maintenance). drifting: CUSUM
     detected a sustained shift AND the score dropped to the watch level (both
-    significance and magnitude, so flat-but-noisy healthy joints do not flag)."""
-    out = []
+    significance and magnitude, so flat-but-noisy healthy joints do not flag). This
+    is where 'quarantine' lives, a lasting trend judgement, not a single hot run."""
+    out, quarantined = [], False
     for i, score in enumerate(scores):
         if score <= cap_score:
-            out.append("alarm")
+            quarantined = True            # latched: once the joint is pulled, it stays pulled,
+        if quarantined:                   # so a noisy cool day cannot un-quarantine it
+            out.append("quarantine")
         elif alarm_day is not None and i >= alarm_day and score <= watch_score:
             out.append("drifting")
         else:

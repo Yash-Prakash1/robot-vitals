@@ -41,4 +41,4 @@ def test_adapter_readings_feed_the_gate():
     report = evaluate_run("wx-07", "r", "2026-05-15T09:00:00",
                           adapter.read_joint_temperatures(), adapter.joint_limits())
     assert report.weakest_joint == "elbow"
-    assert report.verdict is Verdict.QUARANTINE
+    assert report.verdict is Verdict.REST

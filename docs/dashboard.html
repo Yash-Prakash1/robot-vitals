@@ -33,9 +33,9 @@
     border-radius:8px; padding:8px 12px; display:inline-block; }
   .muted { color:var(--muted); }
   .badge { font-size:10.5px; font-weight:600; padding:2px 8px; border-radius:20px; white-space:nowrap; }
-  .b-PASS,.b-stable { color:var(--stable); background:color-mix(in srgb,var(--stable) 15%,transparent); }
-  .b-WARN,.b-drifting { color:var(--drift); background:color-mix(in srgb,var(--drift) 18%,transparent); }
-  .b-QUARANTINE,.b-alarm { color:var(--alarm); background:color-mix(in srgb,var(--alarm) 18%,transparent); }
+  .b-COLLECT,.b-stable { color:var(--stable); background:color-mix(in srgb,var(--stable) 15%,transparent); }
+  .b-REST,.b-drifting { color:var(--drift); background:color-mix(in srgb,var(--drift) 18%,transparent); }
+  .b-quarantine { color:var(--alarm); background:color-mix(in srgb,var(--alarm) 18%,transparent); }
   a { color:var(--accent); }
 
   /* how-it-works steps */
@@ -73,9 +73,9 @@
   .gate-grid { display:inline-grid; grid-auto-flow:column; gap:3px; margin-top:6px; }
   .gcol { display:grid; grid-template-rows:repeat(4,1fr); gap:3px; }
   .gcell { width:17px; height:15px; border-radius:3px; cursor:pointer; }
-  .gcell.PASS { background:var(--pass); opacity:.30; }
-  .gcell.WARN { background:var(--warn); }
-  .gcell.QUARANTINE { background:var(--quar); }
+  .gcell.COLLECT { background:var(--pass); opacity:.30; }
+  .gcell.REST { background:var(--warn); }
+  .gcell.rested { box-shadow:inset 0 0 0 1.5px var(--warn); }
   .gcell:hover { outline:2px solid var(--accent); outline-offset:1px; }
   .xaxis { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin:6px 0 0; max-width:620px; }
   .legend { display:flex; gap:16px; font-size:12px; color:var(--muted); margin:12px 0 0; flex-wrap:wrap; }
@@ -147,16 +147,16 @@
 
   <section id="gate">
     <h2 id="gate-h">Per-run gate</h2>
-    <p class="lead">Each cell is one run (four per day, columns are days), colored by its verdict, set by the
-    weakest joint. Hover for all seven temperatures, click for the full breakdown. Later runs in a day run
-    warmer, as the arm heats up.</p>
+    <p class="lead">Each cell is one run (four per day, columns are days). Green is collect; amber is too hot,
+    rest it. An amber outline marks a run the robot rested (cooled) before collecting, the throughput cost.
+    Hover for all seven temperatures, click for the full breakdown.</p>
     <div class="panel">
       <div class="gate-wrap"><div class="gate-grid" id="gate-grid"></div></div>
       <div class="xaxis"><span id="ax0"></span><span id="ax1"></span></div>
       <div class="legend">
-        <span><i style="background:var(--pass);opacity:.5"></i>PASS</span>
-        <span><i style="background:var(--warn)"></i>WARN</span>
-        <span><i style="background:var(--quar)"></i>QUARANTINE</span>
+        <span><i style="background:var(--pass);opacity:.5"></i>collect</span>
+        <span><i style="background:var(--warn)"></i>too hot, rest it</span>
+        <span><i style="box-shadow:inset 0 0 0 1.5px var(--warn)"></i>rested to stay cool</span>
       </div>
     </div>
   </section>
@@ -165,7 +165,8 @@
     <h2 id="maint-h">Predictive maintenance, per joint</h2>
     <p class="lead">At day's end, the same sensors feed a drift detector for each joint, on two channels:
     temperature and motor current. A joint is flagged only when it both drifts statistically and degrades
-    meaningfully. Watch where maintenance was called (blue), and where the joint got too degraded to trust (red).</p>
+    meaningfully. Watch where maintenance was called (blue), and where it reached quarantine, no longer
+    serviceable (red).</p>
     <div class="jcards" id="jcards"></div>
   </section>
 
@@ -206,13 +207,13 @@
   // scoring (reads single-sourced thresholds; same formula as src/quality_score.py)
   function score(temp,limit){ var b=D.meta.thresholds.healthy_band_c, c=limit-b;
     if(temp<=c)return 100; if(temp>=limit)return 0; return 100*(limit-temp)/b; }
-  function verdict(temp,limit){ var th=D.meta.thresholds;
-    if(temp<=limit-th.warn_offset_c)return "PASS"; if(temp<=limit-th.quarantine_offset_c)return "WARN"; return "QUARANTINE"; }
+  // collect below the data-at-risk line, otherwise the actuator is rested before recording
+  function verdict(temp,limit){ return (temp < limit - D.meta.thresholds.data_at_risk_offset_c) ? "COLLECT" : "REST"; }
 
   // status / verdict to color (the CSS b-* classes encode the same map)
-  function lineColor(s){ return s==="alarm"?"var(--alarm)":(s==="drifting"?"var(--drift)":"var(--stable)"); }
-  function verdictColor(v){ return v==="QUARANTINE"?"var(--quar)":(v==="WARN"?"var(--warn)":"var(--pass)"); }
-  function armStatus(r){ return r.flags.some(function(f){return f.status==="alarm";})?"alarm":(r.flags.length?"drifting":"stable"); }
+  function lineColor(s){ return s==="quarantine"?"var(--alarm)":(s==="drifting"?"var(--drift)":"var(--stable)"); }
+  function verdictColor(v){ return v==="REST"?"var(--warn)":"var(--pass)"; }
+  function armStatus(r){ return r.flags.some(function(f){return f.status==="quarantine";})?"quarantine":(r.flags.length?"drifting":"stable"); }
 
   // one table row per joint, shared by the how-it-works table and the detail
   // table (the only difference is the detail view's temp-vs-limit bar cell).
@@ -220,7 +221,7 @@
     var t=run.temps_c[j.name], sc=score(t,j.limit_c), vd=verdict(t,j.limit_c), weak=(j.name===run.weakest_joint);
     var bar=withBar?"<td style='width:200px'><div class='bar'><div class='fill' style='width:"
       +(Math.max(0,Math.min(1,(t-30)/(j.limit_c-30)))*100).toFixed(0)+"%;background:"+verdictColor(vd)
-      +";opacity:"+(vd==='PASS'?.45:.85)+"'></div><div class='lim' style='left:100%'></div></div></td>":"";
+      +";opacity:"+(vd==='COLLECT'?.45:.85)+"'></div><div class='lim' style='left:100%'></div></div></td>":"";
     return "<tr class='"+(weak?"weak":"")+"'><td>"+j.name+(weak&&!withBar?" &larr; weakest":"")
       +"</td><td class='muted'>"+j.model.split("-")[0]+"</td>"+bar+"<td class='num'>"+t.toFixed(1)
       +"</td><td class='num'>"+j.limit_c+"</td><td class='num'>"+sc.toFixed(0)+"</td><td><span class='badge b-"+vd+"'>"+vd+"</span></td></tr>";
@@ -257,12 +258,13 @@
     p.push("<circle cx='"+X(n-1).toFixed(1)+"' cy='"+Y(values[n-1]).toFixed(1)+"' r='2.4' fill='"+(opts.color||"var(--accent)")+"'/>");
     p.push("</svg>"); return p.join("");
   }
-  // the two markers every maintenance chart shares: where maintenance was called
-  // (drift detected) and where it became too bad to operate (cap crossed).
-  function driftMarkers(ch){ return [ {x:ch.cusum_detected_day,color:"var(--accent)",label:"called"},
-    {x:ch.cap_cross_day,color:"var(--alarm)",label:"pull"} ]; }
-  function thermalLines(limit){ return [ {y:limit,color:"var(--alarm)",label:"limit "+limit},
-    {y:limit-D.meta.thresholds.warn_offset_c,color:"var(--warn)",dashed:true,label:"warn"} ]; }
+  // maintenance "called" is the two-condition flag (CUSUM detection AND the score past
+  // the watch level), i.e. the first non-stable day, not the raw CUSUM detection.
+  function firstFlagDay(ch){ var sb=ch.status_by_day||[]; for(var i=0;i<sb.length;i++) if(sb[i]!=="stable") return i; return null; }
+  function driftMarkers(ch){ return [ {x:firstFlagDay(ch),color:"var(--accent)",label:"called"},
+    {x:ch.cap_cross_day,color:"var(--alarm)",label:"quarantine"} ]; }
+  function thermalLines(limit){ var th=D.meta.thresholds; return [ {y:limit,color:"var(--muted)",op:.4,label:limit+" C limit"},
+    {y:limit-th.data_at_risk_offset_c,color:"var(--alarm)",dashed:true,label:"data at risk"} ]; }
 
   // ---------- how it works ----------
   function worstRun() {
@@ -274,7 +276,7 @@
     var steps=[
       ["Read","Read every joint's Present Temperature over the serial bus. No added sensors."],
       ["Score","Score each joint's headroom to its own datasheet limit (80 C XM430, 72 C XL430)."],
-      ["Weakest link","The run's gate score and verdict come from the weakest joint. One hot joint corrupts the run."],
+      ["Weakest link","The run's verdict is the weakest joint: collect, rest the actuator to cool if it has reached its data-at-risk line, or reject a run that reads too hot to trust (a sudden transient rest cannot foresee)."],
       ["Stamp","Attach the score, verdict, and per-joint breakdown to every episode the run records."],
     ];
     var s=byId("steps"); s.innerHTML="";
@@ -293,14 +295,15 @@
 
   // ---------- gate grid for the selected arm ----------
   function renderGate(r) {
-    byId("gate-h").textContent="Per-run gate · "+armName(r.robot_id);
+    var totalRests=(r.daily_rests||[]).reduce(function(a,b){return a+b;},0);
+    byId("gate-h").textContent="Per-run gate · "+armName(r.robot_id)+(totalRests?" · "+totalRests+" cooldowns this month":"");
     var grid=byId("gate-grid"); grid.innerHTML="";
     var byDay={};
     r.runs.forEach(function(run){ (byDay[run.day]=byDay[run.day]||[])[run.run_index]=run; });
     Object.keys(byDay).map(Number).sort(function(a,b){return a-b;}).forEach(function(day){
       var col=el("div","gcol");
       byDay[day].forEach(function(run){
-        var c=el("div","gcell "+run.verdict);
+        var c=el("div","gcell "+run.verdict+(run.rested?" rested":""));
         c.addEventListener("mousemove",function(ev){ showTip(ev, runTip(r.robot_id,run)); });
         c.addEventListener("mouseleave",function(){ tip.style.opacity=0; });
         c.addEventListener("click",function(){ openDetail(r,run); });
@@ -316,7 +319,7 @@
       return "<span style='color:"+(weak?"#fff":"inherit")+(weak?";font-weight:700":"")+"'>"+j.name+" "+t.toFixed(1)+"</span>";
     }).join(" &middot; ");
     return "<strong>"+armName(rid)+"  "+run.timestamp.replace("T"," ")+"  run "+run.run_index+"</strong><br>"
-      +"verdict <strong>"+run.verdict+"</strong>, gate score "+run.gate_score+"<br>"+js+"<br><span style='opacity:.7'>click for detail</span>";
+      +"verdict <strong>"+run.verdict+"</strong>"+(run.rested?" (rested to stay cool)":"")+", gate score "+run.gate_score+"<br>"+js+"<br><span style='opacity:.7'>click for detail</span>";
   }
   function showTip(ev,html){ tip.innerHTML=html; tip.style.opacity=1; tip.style.left=ev.clientX+"px"; tip.style.top=ev.clientY+"px"; }
 
@@ -330,13 +333,13 @@
     var base=ch.baseline_mean, cap=base*(1+D.meta.thresholds.effort_action_cap_pct);
     var lo=Math.min(base*0.96, Math.min.apply(null,ch.raw))-0.005, hi=Math.max(cap*1.04, Math.max.apply(null,ch.raw))+0.005;
     return lineChart(ch.raw,{ yMin:lo, yMax:hi, yround:2, color:lineColor(ch.status),
-      lines:[ {y:cap,color:"var(--alarm)",dashed:true,label:"cap +25%"}, {y:base,color:"var(--muted)",label:"baseline",op:.5} ],
+      lines:[ {y:cap,color:"var(--alarm)",dashed:true,label:"quarantine (+25%)"}, {y:base,color:"var(--muted)",label:"baseline",op:.5} ],
       markers:driftMarkers(ch) });
   }
   function capNote(ch){
     if(ch.status==="stable")return "stable, no sustained drift";
-    var s="maintenance called "+D.meta.dates[ch.cusum_detected_day];
-    if(ch.cap_cross_day!=null)s+=", too bad to operate "+D.meta.dates[ch.cap_cross_day];
+    var f=firstFlagDay(ch), s="maintenance called "+(f!=null?D.meta.dates[f]:"?");
+    if(ch.cap_cross_day!=null)s+=", quarantine "+D.meta.dates[ch.cap_cross_day];
     return s;
   }
   function renderMaint(r){
@@ -380,16 +383,12 @@
   // ---------- payoff ----------
   function renderPayoff(){
     var e=byId("payoff");
-    var creep=D.robots.find(function(r){ return r.flags.some(function(f){ return f.channel==="thermal"&&f.status==="alarm"; }); });
-    if(!creep){ e.innerHTML="<p style='margin:0'>No joint reached the maintenance alarm this run. Try another simulation to see the two-timescale payoff.</p>"; return; }
-    var f=creep.flags.find(function(x){ return x.channel==="thermal"&&x.status==="alarm"; });
-    var firstWarn=creep.runs.find(function(run){ return run.weakest_joint===f.joint&&run.verdict!=="PASS"; });
-    var until=firstWarn?D.meta.dates[firstWarn.day]:"the end", lead=firstWarn?(firstWarn.day-f.detected_day):0;
-    var leadPhrase=(firstWarn&&lead>0)
-      ? ", <strong>"+lead+" days earlier</strong>, and marked it too bad to operate on "+D.meta.dates[f.cap_cross_day]+"." : ".";
-    e.innerHTML="<p style='margin:0 0 8px'>On <strong>"+armName(creep.robot_id)+"</strong>, the <strong>"+f.joint+"</strong> joint passed its per-run gate every run until "
-      +until+". The maintenance layer called for attention on <strong>"+D.meta.dates[f.detected_day]+"</strong>"+leadPhrase
-      +"</p><p style='margin:0;color:var(--muted)'>Same registers, two timescales. The longitudinal layer buys a scheduled fix instead of a mid-collection failure, without claiming a date it cannot honestly know.</p>";
+    var arm=D.robots.find(function(r){ return r.flags.some(function(f){ return f.channel==="thermal"&&f.status==="quarantine"; }); });
+    if(!arm){ e.innerHTML="<p style='margin:0'>No joint reached quarantine this run. Try another simulation to see the two-timescale payoff.</p>"; return; }
+    var f=arm.flags.find(function(x){ return x.channel==="thermal"&&x.status==="quarantine"; });
+    var ch=arm.maintenance[f.joint].thermal, called=firstFlagDay(ch), rests=(arm.daily_rests||[]).reduce(function(a,b){return a+b;},0);
+    e.innerHTML="<p style='margin:0 0 8px'>On <strong>"+armName(arm.robot_id)+"</strong>, the <strong>"+f.joint+"</strong> motor heated faster and faster. The fast gate kept every collected run clean by resting the actuator (<strong>"+rests+" cooldowns</strong> over the month), so no corrupt data was ever recorded; the patient trend called maintenance on <strong>"+D.meta.dates[called]+"</strong> and marked it for a pull on <strong>"+D.meta.dates[f.cap_cross_day]+"</strong>, <strong>"+(f.cap_cross_day-called)+" days</strong> of lead.</p>"
+      +"<p style='margin:0;color:var(--muted)'>Same registers, two timescales. The gate guards each run's data, resting through transient heat; the trend guards uptime, buying a scheduled fix instead of a surprise outage, without claiming a date it cannot honestly know.</p>";
   }
 
   // ---------- arm tabs + top-level render ----------
