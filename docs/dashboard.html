@@ -80,6 +80,9 @@
   .xaxis { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin:6px 0 0; max-width:620px; }
   .legend { display:flex; gap:16px; font-size:12px; color:var(--muted); margin:12px 0 0; flex-wrap:wrap; }
   .legend i { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:middle; }
+  .costrow { margin-top:14px; max-width:640px; }
+  .costlabel { font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); margin-bottom:2px; }
+  #rests-chart svg { max-width:640px; }
 
   /* joint maintenance cards */
   .jcards { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:6px; }
@@ -125,9 +128,11 @@
 
   <section id="how">
     <h2>How the pre-flight check works</h2>
-    <p class="lead">Before every run, the gate reads all seven joint temperatures and turns them into the
-    metadata stamped on each recorded episode. Here it is on the worst run in this fleet. Click any run below
-    to see the same breakdown.</p>
+    <p class="lead">Heat from use is normal and recoverable. Before every run, the gate reads all seven joints,
+    scores each against its own limit, and acts on the weakest: collect when it is cool, rest the actuator to
+    cool first once it reaches its data-at-risk line (so the run is recorded clean), or reject a run that reads
+    too hot to trust. The score, verdict, and breakdown are stamped onto every episode. Below is the gate on
+    the hardest run it still collected; click any run for its breakdown.</p>
     <div class="steps" id="steps"></div>
     <div class="worked panel" id="worked"></div>
   </section>
@@ -158,15 +163,17 @@
         <span><i style="background:var(--warn)"></i>too hot, rest it</span>
         <span><i style="box-shadow:inset 0 0 0 1.5px var(--warn)"></i>rested to stay cool</span>
       </div>
+      <div class="costrow"><div class="costlabel">rests per day &middot; the time spent cooling instead of collecting</div><div id="rests-chart"></div></div>
     </div>
   </section>
 
   <section id="maint">
     <h2 id="maint-h">Predictive maintenance, per joint</h2>
     <p class="lead">At day's end, the same sensors feed a drift detector for each joint, on two channels:
-    temperature and motor current. A joint is flagged only when it both drifts statistically and degrades
-    meaningfully. Watch where maintenance was called (blue), and where it reached quarantine, no longer
-    serviceable (red).</p>
+    temperature and motor current. The trend watches the daily mean, not the peak: a faster-heating motor runs
+    hotter on average even with resting, so the mean carries the drift the per-run readings hide. A joint is
+    flagged only when it both drifts statistically and degrades meaningfully. Watch where maintenance was
+    called (blue), and where it reached quarantine, no longer serviceable (red).</p>
     <div class="jcards" id="jcards"></div>
   </section>
 
@@ -265,18 +272,34 @@
     {x:ch.cap_cross_day,color:"var(--alarm)",label:"quarantine"} ]; }
   function thermalLines(limit){ var th=D.meta.thresholds; return [ {y:limit,color:"var(--muted)",op:.4,label:limit+" C limit"},
     {y:limit-th.data_at_risk_offset_c,color:"var(--alarm)",dashed:true,label:"data at risk"} ]; }
+  // rests/day bar chart: the throughput cost of the gate's resting, climbing with the fault
+  function restsBar(r){
+    var rests=r.daily_rests||[], n=Math.max(rests.length,1), W=640,H=52,padL=34,padR=8,padT=6,padB=14,
+        plotW=W-padL-padR, plotH=H-padT-padB, bw=plotW/n, mx=Math.max(D.meta.runs_per_day,1);
+    var p=["<svg viewBox='0 0 "+W+" "+H+"' role='img'>",
+      "<text x='2' y='"+(padT+7)+"' font-size='9' fill='var(--muted)'>"+mx+"</text>",
+      "<text x='2' y='"+(H-padB+3)+"' font-size='9' fill='var(--muted)'>0</text>"];
+    rests.forEach(function(v,d){ var hgt=(v/mx)*plotH;
+      p.push("<rect x='"+(padL+d*bw+0.6).toFixed(1)+"' y='"+(padT+plotH-hgt).toFixed(1)+"' width='"+(bw-1.2).toFixed(1)+"' height='"+Math.max(0,hgt).toFixed(1)+"' rx='1' fill='var(--warn)' opacity='.85'/>"); });
+    p.push("</svg>"); return p.join("");
+  }
 
   // ---------- how it works ----------
+  // the hardest run the gate still COLLECTED (skip a rejected transient, so the
+  // worked example is a representative collect/rest, not the acute outlier).
   function worstRun() {
     var best=null;
-    D.robots.forEach(function(r){ r.runs.forEach(function(run){ if(!best||run.gate_score<best.gate_score)best={run:run,rid:r.robot_id}; }); });
+    D.robots.forEach(function(r){ r.runs.forEach(function(run){
+      if(run.verdict==="REST" && !run.rested) return;   // a rejected hot run; not a kept example
+      if(!best||run.gate_score<best.run.gate_score)best={run:run,rid:r.robot_id};
+    }); });
     return best;
   }
   function renderHow() {
     var steps=[
       ["Read","Read every joint's Present Temperature over the serial bus. No added sensors."],
       ["Score","Score each joint's headroom to its own datasheet limit (80 C XM430, 72 C XL430)."],
-      ["Weakest link","The run's verdict is the weakest joint: collect, rest the actuator to cool if it has reached its data-at-risk line, or reject a run that reads too hot to trust (a sudden transient rest cannot foresee)."],
+      ["Decide","The run's verdict is the weakest joint: collect, rest the actuator to cool if it has reached its data-at-risk line, or reject a run that reads too hot to trust (a sudden transient rest cannot foresee)."],
       ["Stamp","Attach the score, verdict, and per-joint breakdown to every episode the run records."],
     ];
     var s=byId("steps"); s.innerHTML="";
@@ -287,7 +310,7 @@
     var stamp={ robot_id:w.rid, run_id:run.run_id, timestamp:run.timestamp,
       quality_score:run.gate_score, verdict:run.verdict, weakest_joint:run.weakest_joint };
     byId("worked").innerHTML =
-      "<div><div class='muted' style='font-size:12px;margin-bottom:6px'>Run "+run.run_id+" at "+run.timestamp+"</div>"
+      "<div><div class='muted' style='font-size:12px;margin-bottom:6px'>Run "+run.run_id+" at "+run.timestamp+(run.rested?" &middot; rested to cool, then collected":"")+"</div>"
       +"<table class='joints'><tr><th>Joint</th><th>Servo</th><th>Temp C</th><th>Limit</th><th>Score</th><th>Verdict</th></tr>"+rows+"</table></div>"
       +"<div><div class='muted' style='font-size:12px;margin-bottom:6px'>Metadata stamped onto the episode</div>"
       +"<pre class='stamp'>"+JSON.stringify(stamp,null,2)+"</pre></div>";
@@ -312,6 +335,7 @@
       grid.appendChild(col);
     });
     byId("ax0").textContent=D.meta.start_date; byId("ax1").textContent=D.meta.end_date;
+    byId("rests-chart").innerHTML=restsBar(r);
   }
   function runTip(rid,run){
     var js=D.meta.joints.map(function(j){
@@ -409,9 +433,13 @@
     var r=robot(selectedArm); renderGate(r); renderMaint(r);
   }
   function render(){
-    byId("synthetic").textContent = D.meta.generated_note+"  "+D.meta.fleet_size+" WidowX-250 arms, "
-      +D.meta.runs_per_day+" runs/day over "+D.meta.days+" days ("+D.meta.start_date+" to "+D.meta.end_date
-      +"). 7 joints; shoulder and elbow are each driven by two servos on the real arm. Real register reads: src/interface.py.";
+    byId("synthetic").innerHTML = "<b>The data.</b> "+D.meta.fleet_size+" WidowX arms, each running "
+      +D.meta.runs_per_day+" data-collection runs a day for "+D.meta.days+" days ("+D.meta.start_date+" to "
+      +D.meta.end_date+"). Before every run the gate reads all seven joints' temperature and the day's reference "
+      +"current, the same DYNAMIXEL registers already on the bus, no added sensors (shoulder and elbow are each "
+      +"two servos, so 9 servos read as 7 joints). Every episode the run records is stamped with the run's "
+      +"health; at day's end the daily-mean temperature and current feed the drift trend; rests per day is the "
+      +"cost of staying cool. Synthetic here; the real register reads are in src/interface.py.";
     renderHow();
     if(!selectedArm||!robot(selectedArm)){
       var planted=D.robots.find(function(r){ return r.flags.length; });
@@ -420,9 +448,11 @@
     buildTabs(); renderArm(); renderPayoff();
     var th=D.meta.thresholds;
     byId("footer").innerHTML="Thresholds are illustrative pending fleet validation, except the servo datasheet limits "
-      +"(80 C XM430, 72 C XL430). CUSUM k = "+th.cusum_k_sigma+" sigma, h = "+th.cusum_h_sigma+" sigma, baseline "
-      +th.baseline_days+" days; a joint is flagged only with both a CUSUM detection and a drop past the watch level. "
-      +"See the README for the audit and the real register reads.";
+      +"(80 C XM430, 72 C XL430). The gate rests at the data-at-risk line ("+th.data_at_risk_offset_c+" C below each "
+      +"limit) so no run is recorded above the corruption line ("+th.corruption_offset_c+" C below). CUSUM k = "
+      +th.cusum_k_sigma+" sigma, h = "+th.cusum_h_sigma+" sigma, baseline "+th.baseline_days+" days; a joint is "
+      +"flagged only with both a CUSUM detection and a score past the watch level, and quarantined once its daily "
+      +"mean reaches the data-at-risk line. See the README for the audit and the real register reads.";
   }
 
   // ---------- controls ----------
